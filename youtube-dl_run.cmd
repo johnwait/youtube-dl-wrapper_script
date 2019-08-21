@@ -121,8 +121,8 @@ call set "LC_AO_CHOSEN_QUERY_VO_fr=%%__vo_ao_meta_fr:??type1??=audio%%" & call s
 set __vo_ao_dupe_en=
 set __vo_ao_dupe_fr=
 ::  *** More template strings to avoid redundancy
-set __vo_ao_meta_en=No ??type1?? stream; download only the ??type2?? format as selected"
-set __vo_ao_meta_fr=Aucun flux ??type1?? ; ne télécharger que le format ??type2?? déjà sélectionné"
+set "__vo_ao_meta_en=No ??type1?? stream; download only the ??type2?? format as selected"
+set "__vo_ao_meta_fr=Aucun flux ??type1?? ; ne télécharger que le format ??type2?? déjà sélectionné"
 ::  - No VO stream, only download+keep audio one
 call set "LC_CHOICE_NO_VO_KEEP_AO_en=%%__vo_ao_meta_en:??type1??=video%%" & call set "LC_CHOICE_NO_VO_KEEP_AO_en=%%LC_CHOICE_NO_VO_KEEP_AO_en:??type2??=audio%%"
 call set "LC_CHOICE_NO_VO_KEEP_AO_fr=%%__vo_ao_meta_fr:??type1??=vidéo%%" & call set "LC_CHOICE_NO_VO_KEEP_AO_fr=%%LC_CHOICE_NO_VO_KEEP_AO_fr:??type2??=audio%%"
@@ -204,6 +204,7 @@ shift & goto emptystack_loop
 :: Query for an URL if none provided
 set /p "l_url=%LC_URL_QUERY%"
 echo:
+:got_url
 
 :compile_helper
 :: Build the helper executable
@@ -216,7 +217,7 @@ if exist "%l_exe%" if not "%SAFEMODE%"=="1" goto got_url
 if "%DEBUGEXE%"=="1" "%l_jsc%" /nologo /debug+ /print+ /out:"%l_exe%" /t:exe "%~dpsfnx0"
 if not "%DEBUGEXE%"=="1" "%l_jsc%" /nologo /fast+ /print+ /out:"%l_exe%" /t:exe "%~dpsfnx0"
 
-:got_url
+:dl_details
 :: Retrieve title and formats
 echo:%LC_STEP_DETAILS_DL%
 if "%l_ytdl_xtraflags%"=="" (
@@ -377,7 +378,7 @@ for /L %%z in (1,1,%l_formats_count%) do (
     if "!l_group_header_shown!"=="" if "!l_current_group!"=="video-only" echo:  ^[%LC_FMT_GROUP_VO%^]
     if "!l_group_header_shown!"=="" if "!l_current_group!"=="audio-only" echo:  ^[%LC_FMT_GROUP_AO%^]
     set l_group_header_shown=1
-    :: Display choice line, as long as we have a format ID, for:
+    :: Display choice line, as long as we have a format ID:
     set l_line=
     if not "!l_format_%%z_key!"=="" (
         if "!l_format_%%z_streams!"=="video+audio" set "l_line=%LC_FMT_LINE_VA:??=¤%"
@@ -528,7 +529,7 @@ for /F "tokens=* delims=" %%a in ('%l_exe% -p "%l_workdir%" -f "%l_filename%" -t
 :: Make sure user didn't cancel
 if "%l_output%"=="" goto canceled
 if "%l_output%"=="*" goto canceled
-:: Delete any existing file (as user would have confirm such action if not canceled)
+:: Delete any existing file (as the user would already have confirmed such action)
 if exist "%l_output%" del /f /q "%l_output%">nul 2>&1
 
 :: Show output filename
