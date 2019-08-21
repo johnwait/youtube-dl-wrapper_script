@@ -1,30 +1,92 @@
-@if (@X)==(@Y) @end /* JScript comment
+@if (@X)==(@Y) @end /* Exclude batch code from JScript
 @echo off
 
 :: Handle procedure calls
 set __self=%~nx0
 set "__selfAbs=%~f0"
-if (%1)==(:) if not (%2)==() shift & shift & goto %2
+if (%~1)==(:) if not (%~2)==() shift & shift & goto %~2
 
 :: Enable delayed expansion *after* handling procedure calls
 setlocal EnableDelayedExpansion
+
+:: Execution flags:
+:: - DEBUG: When set, prevents the script from deleting the compiled executable
+::          (which then becomes available from further analysis or tests)
+:: - SAFETY: When set, prevents the script from reusing the compiled executable
+::           generated from a previous run; notably, by doing that we forgo the
+::           (unsafe) assumption that an executable with an identical name is
+::           necessarily one we previously compiled. In doubt, leave it set.
 set DEBUG=1
+set SAFEMODE=1
 
 :: Config
-:: - Working directory, if any (leave blank to use the script's directory)
+::  - Working directory, if any (leave blank to use the script's directory)
 set "l_workdir="
-:: - youtube-dl binary
+::  - youtube-dl binary
 set "l_ytdl_dir=%cd%"
-set l_ytdl_exe=youtube-dl.exe
-:: - Path to ffmpeg.exe ; change accordingly
-set l_ffmpeg_path=C:\Program Files\ffmpeg-4.0.2-win64-static\bin
-:: - Query phrases
-set "l_query_url=Enter or paste the URL here: "
-:: - JScript.NET build
+set "l_ytdl_exe=youtube-dl.exe"
+::  - Path to ffmpeg.exe; change accordingly
+set "l_ffmpeg_path=C:\Program Files\ffmpeg-4.0.2-win64-static\bin"
+::  - JScript.NET build
 set l_exe_name=__ytdl_saveas
 set l_exe_path=%tmp%
 set l_exe=%l_exe_path%\%l_exe_name%.exe
-set l_adsname=output_path.dat
+:: - File for temporary storing format defs
+set "l_fmtdump_file=__ytdl_formats.txt"
+set "l_fmtdump_path=%tmp%"
+set "l_fmtdump=%l_fmtdump_path%\%l_fmtdump_file%"
+
+:: Localized strings (12x)
+::  - Script's name
+set "LC_SCRIPT_NAME_en=YouTube Video Downloader Script"
+set "LC_SCRIPT_NAME_fr=Script de t‚l‚chargement de vid‚os YouTube"
+::  - Query for the video URL
+set "LC_QUERY_URL_en=Enter or paste the YouTube/video URL here: "
+set "LC_QUERY_URL_fr=Veuillez taper ou d‚poser ici le lien vers la vid‚o : "
+::  - Loading video details
+set "LC_DETAILS_DOWNLOAD_en=Retrieving video details..."
+set "LC_DETAILS_DOWNLOAD_fr=R‚cup‚ration des d‚tails de la vid‚o ..."
+::  - "Done", used after each successful step
+set "LC_STEP_DONE_en=... done"
+set "LC_STEP_DONE_fr=... ‚tape accomplie."
+::   NOTE: In French & German (and others), word might have a grammatical gender;
+::         as such, for French at least and as visible above, we reuse the same
+::         nominal group to ensure the qualifier always agree in gender with
+::         the qualified noun, instead of the step's action noun/nominal group.
+::  - Title of the video / for the URL
+set "LC_VIDEO_TITLE_en=Title: "
+set "LC_VIDEO_TITLE_fr=Titre de la vid‚o : "
+::  - List of available formats
+set "LC_AVAIL_FORMATS_en=Available formats:"
+set "LC_AVAIL_FORMATS_fr=Formats disponibles :"
+::  - Cancel option among listed formats
+set "LC_OPTION_CANCEL_en=  Q) Cancel and exit"
+set "LC_OPTION_CANCEL_fr=  Q) Annuler et quitter"
+::  - For showing the chosen video format (which follows immediately)
+set "LC_CHOSEN_FORMAT_en=- Format chosen: "
+set "LC_CHOSEN_FORMAT_fr=- Format choisi : "
+::  - For showing the filename under which the video will be saved
+set "LC_OUTPUT_FILENAME_en=- Output filename: "
+set "LC_OUTPUT_FILENAME_fr=- Nom du fichier vid‚o : "
+::  - Downloading started
+set "LC_DOWNLOAD_STARTED_en=Downloading..."
+set "LC_DOWNLOAD_STARTED_fr=T‚l‚chargement en cours ..."
+::  - Script completed
+set "LC_SCRIPT_COMPLETED_en=Script completed."
+set "LC_SCRIPT_COMPLETED_fr=Script termin‚."
+::  - Script aborted
+set "LC_SCRIPT_ABORTED_en=Script aborted."
+set "LC_SCRIPT_ABORTED_fr=Script interrompu."
+
+:: Extract user's locale
+for /f "tokens=3* delims=	 " %%a in ('REG QUERY "HKEY_CURRENT_USER\Control Panel\Desktop" /v "PreferredUILanguages" ^| find /i "PreferredUILanguages"') do set l_ui_locale=%%a
+for /f "tokens=1,2* delims=-" %%a in ("%l_ui_locale%") do set l_ui_locale_lang=%%a& set l_ui_locale_country=%%b
+set l_script_lang=%l_ui_locale_lang%
+:: Revert to default if not supported
+if not "%l_script_lang%"=="en" if not "%l_script_lang%"=="fr" set l_script_lang=en
+
+:: Expand localized strings
+call "%__selfAbs%" : :proc_expand_lcstrs
 
 :: Set up our workspace
 set "l_run_path=%cd%"
@@ -37,27 +99,34 @@ pushd "%tmp%"
 for /F "tokens=1,2 delims=:" %%a in ('chcp') do set /A l_cmd_cp=%%b>nul
 
 :: Header
-echo:YouTube Video Downloader Script
+echo:%LC_SCRIPT_NAME%
 echo:
 
-:: Handle passed arguments, if any
-if not "%1"=="" (
-    set l_url=%1
+:: Handle arguments passed from the command line, if any
+if not "%~1"=="" (
+    set "l_url=%~1"
     if "!l_url:~0,24!"=="https://www.youtube.com/" goto got_url
+    if "!l_url:~0,23!"=="http://www.youtube.com/" goto got_url
+    if "!l_url:~0,17!"=="https://youtu.be/" goto got_url
+    if "!l_url:~0,16!"=="http://youtu.be/" goto got_url
 )
 
-:: Query params
-set /p "l_url=%l_query_url%"
+:: Query for an URL if none provided
+set /p "l_url=%LC_QUERY_URL%"
 echo:
 
 :got_url
 :: Retrieve title and formats
-echo:Retrieving video details...
+echo:%LC_DETAILS_DOWNLOAD%
 set l_title=
 for /F "tokens=*" %%a in ('%l_ytdl_exe% -e "%l_url%"') do set l_title=%%a
 set l_formats=
-REM for /F "tokens=1,2,3,4,5,6,* delims=," %%a in ('%l_ytdl_exe% -F "%l_url%"^|find "mp4"^|find "video only"') do (
-for /F "tokens=1,2,3,4,5,6,* delims=," %%a in ('%l_ytdl_exe% -F "%l_url%"^|find "mp4"') do (
+%l_ytdl_exe% -F "%l_url%">"%l_fmtdump%" 2>nul
+echo:... done
+echo:
+echo:Processing formats list...
+set l_formats_count=0
+for /F "tokens=1,2,3,4,5,6,* delims=," %%a in ('type "%l_fmtdump%"^|find "mp4"') do (
     :: Trim values
     set l_format_spec=%%a
     call "%__selfAbs%" : proc_trim l_format_spec
@@ -72,7 +141,7 @@ for /F "tokens=1,2,3,4,5,6,* delims=," %%a in ('%l_ytdl_exe% -F "%l_url%"^|find 
 set l_format_size=
 set l_format_spec=
 set l_format=
-echo:... done
+echo:%LC_STEP_DONE%
 echo:
 
 :: Further parse video formats
@@ -85,9 +154,9 @@ set /A l_formats_count=%l_cntr%-1
 :: Limit formats to 25
 if %l_formats_count% GTR 25 set l_formats_count=25
 :: Display title and formats available
-echo:Title: %l_title%
+echo:%LC_VIDEO_TITLE%%l_title%
 echo:
-echo:Available formats:
+echo:%LC_AVAIL_FORMATS%
 set l_choices=
 for /L %%z in (1,1,%l_formats_count%) do (
     set l_choice=%%z
@@ -111,16 +180,16 @@ for /L %%z in (1,1,%l_formats_count%) do (
     set l_choices=!l_choices!!l_choice!
 )
 echo:  --
-echo:  Q) Cancel
+echo:%LC_OPTION_CANCEL%
 echo:
 set l_format_chosen=
 set /A l_quit_idx=%l_formats_count%+1
 choice /C %l_choices%Q /N /M "Choose which format to download [1-%l_formats_count%,Q]: "
 if ERRORLEVEL %l_quit_idx% goto canceled
 for /l %%c in (%l_formats_count%,-1,1) do if ERRORLEVEL %%c set l_format_chosen=!l_format_%%c!&set l_format_chosen_id=!l_format_%%c_id!&set l_format_chosen_key=!l_format_%%c_key!
-echo:- Format chosen: %l_format_chosen_key%
+echo:%LC_CHOSEN_FORMAT%%l_format_chosen_key%
 
-:: Asking for an output filename
+:: Asking user for an output filename through our JScript.NET-compiled executable
 :: - Set JScript.NET environment
 for /f "tokens=* delims=" %%v in ('dir /b /s /a:-d  /o:-n "%SystemRoot%\Microsoft.NET\Framework\*jsc.exe"') do (
    set "l_jsc=%%v"
@@ -129,24 +198,23 @@ for /f "tokens=* delims=" %%v in ('dir /b /s /a:-d  /o:-n "%SystemRoot%\Microsof
 if not exist "%l_exe%" (
     "%l_jsc%" /nologo /out:"%l_exe%" "%~dpsfnx0"
 )
-:: Propose a filename based on video title
+:: - Choose a default filename based on the video's title
 set "l_filename=%l_title%_%l_format_chosen_key%.mp4"
-:: - Execute it with a suggested filename
+:: - Execute the utility and store the filename chosen
 set l_output=
-echo:*>"%__selfAbs%:%l_adsname%"
-"%l_exe%" -dcp %l_cmd_cp% -f "%l_filename%" -p "%l_workdir%">"%__selfAbs%:%l_adsname%"&set /p l_output=< "%__selfAbs%:%l_adsname%"
-:: - Delete executable (DEBUG mode)
+for /F "tokens=* delims=" %%a in ('"%l_exe%" -dcp %l_cmd_cp% -f "%l_filename%" -p "%l_workdir%"') do set "l_output=%%a"
+:: - Delete executable (unless in DEBUG mode)
 if not [%DEBUG%]==[] del /f /q "%l_exe%"
 
 :: Make sure user didn't cancel
 if "%l_output%"=="" goto canceled
 if "%l_output%"=="*" goto canceled
 
-echo:- Output filename: "%l_output%"
+echo:%LC_OUTPUT_FILENAME%"%l_output%"
 echo:
 
 :: Execute youtube-dl.exe
-echo:Downloading...
+echo:%LC_DOWNLOAD_STARTED%
 echo:---
 if "%l_format_chosen_id%"=="" (
     %l_ytdl_exe% -f "best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" --ffmpeg-location "%l_ffmpeg_path%" "%l_url%"
@@ -156,55 +224,86 @@ if "%l_format_chosen_id%"=="" (
 echo:---
 echo:done.
 echo:
-echo:Script completed.
+echo:%LC_SCRIPT_COMPLETED%
 echo:
-pause
-goto cleanup
+goto footer
 
 :canceled
 echo:
-echo:Script aborted.
+echo:%LC_SCRIPT_ABORTED%
 echo:
+goto footer
+
+:footer
+:: Come back to original folder
+popd
 pause
 goto cleanup
 
 :cleanup
-:: Come back to original folder
-popd
-set l_cmd_cp=
-set l_adsname=
-set l_choice=
-set l_choices=
-set l_cntr=
+set __self=
+set __selfAbs=
+set DEBUG=
+set SAFEMODE=
+set l_workdir=
+set l_ytdl_dir=
+set l_ytdl_exe=
+set l_ffmpeg_path=
 set l_exe_name=
 set l_exe_path=
 set l_exe=
-set l_ffmpeg_path=
-set l_filename=
-for /L %%z in (1,1,%l_formats_count%) do set l_format_%%z=&set l_format_%%z_key=
-set l_format_chosen_key=
-set l_format_chosen=
-set l_format_size=
-set l_format_spec=
-set l_format=
-set l_formats_count=
-set l_formats_remain=
-set l_formats=
-set l_item=
-set l_quit_idx=
-set l_return=
-set l_sep=
-set l_target=
-set l_title=
-set l_value=
+set l_fmtdump_file
+set l_fmtdump_path=
+set l_fmtdump=
+set LC_SCRIPT_NAME_en=
+set LC_SCRIPT_NAME_fr=
+set LC_QUERY_URL_en=
+set LC_QUERY_URL_fr=
+set LC_DETAILS_DOWNLOAD_en=
+set LC_DETAILS_DOWNLOAD_fr=
+set LC_STEP_DONE_en=
+set LC_STEP_DONE_fr=
+set LC_VIDEO_TITLE_en=
+set LC_VIDEO_TITLE_fr=
+set LC_AVAIL_FORMATS_en=
+set LC_AVAIL_FORMATS_fr=
+set LC_OPTION_CANCEL_en=
+set LC_OPTION_CANCEL_fr=
+set LC_CHOSEN_FORMAT_en=
+set LC_CHOSEN_FORMAT_en=
+set LC_OUTPUT_FILENAME_en=
+set LC_OUTPUT_FILENAME_fr=
+set LC_DOWNLOAD_STARTED_en=
+set LC_DOWNLOAD_STARTED_fr=
+set LC_SCRIPT_COMPLETED_en=
+set LC_SCRIPT_COMPLETED_fr=
+set LC_SCRIPT_ABORTED_en=
+set LC_SCRIPT_ABORTED_fr=
+set l_ui_locale=
+set l_ui_locale_lang=
+set l_ui_locale_country=
+set l_script_lang=
 set l_run_path=
-set l_ytdl_exe=
-set l_ytdl_dir=
-set l_workdir=
-set DEBUG=
-set __selfAbs=
-set __self=
-
+set l_cmd_cp=
+set l_url=
+set l_title=
+set l_formats=
+REM set l_format_spec=
+REM set l_format_size=
+REM set l_format=
+set l_cntr=
+set l_formats_remain=
+for /L %%z in (1,1,%l_formats_count%) do set l_format_%%z=&set l_format_%%z_key=&set l_format_%%z_id=
+set l_formats_count=
+set l_choices=
+set l_choice=
+set l_format_chosen=
+set l_quit_idx=
+set l_format_chosen_id=
+set l_format_chosen_key=
+set l_jsc=
+set l_filename=
+set l_output=
 goto :EOF
 
 :: ----
@@ -241,9 +340,19 @@ for /f "tokens=1,2,3,4,5,6 delims= " %%a in ("%l_value%") do (
 set %l_target%=%l_return%
 :: Cleanup
 set l_target=
+set l_sep=
 set l_value=
 set l_return=
 set l_item=
+:: Exit procedure
+goto :EOF
+
+:proc_expand_lcstrs
+:: Go through LC_* vars and keep the ones corresponding to script lang
+for /F "tokens=1,2* delims==" %%a in ('set LC_') do (
+    set "l_varname=%%a"
+    if "!l_varname:~-2!"=="%l_script_lang%" set "!l_varname:~0,-3!=%%b"
+)
 :: Exit procedure
 goto :EOF
 
@@ -451,4 +560,4 @@ if (saveFileDialog1.ShowDialog() == DialogResult.OK) {
     }
 }
 
-// End of file "jscript-dot-net_example.cmd"
+// End of file "youtube-dl_run_v6.cmd"
