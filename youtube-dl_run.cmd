@@ -3,59 +3,74 @@
 
 :: Handle procedure calls
 set __self=%~nx0
+set "__selfAbs=%~f0"
 if (%1)==(:) if not (%2)==() shift & shift & goto %2
 
 :: Enable delayed expansion *after* handling procedure calls
 setlocal EnableDelayedExpansion
+set DEBUG=1
 
 :: Config
-set l_ytd_exe=youtube-dl.exe
-:: - Default paths & other values
+:: - Working directory, if any (leave blank to use the script's directory)
+set "l_workdir="
+:: - youtube-dl binary
+set "l_ytdl_dir=%cd%"
+set l_ytdl_exe=youtube-dl.exe
+:: - Path to ffmpeg.exe ; change accordingly
 set l_ffmpeg_path=C:\Program Files\ffmpeg-4.0.2-win64-static\bin
 :: - Query phrases
 set "l_query_url=Enter or paste the URL here: "
 :: - JScript.NET build
-set l_exe_name=__ytd_saveas_helper
+set l_exe_name=__ytdl_saveas
 set l_exe_path=%tmp%
 set l_exe=%l_exe_path%\%l_exe_name%.exe
 set l_adsname=output_path.dat
 
-:: Debug mode: recompile .NET/binary helper everytime
-set DEBUG=1
-
-:: Add parent folder to system paths
-set path=%path%;%cd%
+:: Set up our workspace
+set "l_run_path=%cd%"
+set "path=%path%;%l_run_path%"
+if "%l_workdir%"=="" set "l_workdir=%l_run_path%"
+:: We want to be working within the TMP folder
+:: => in case we end up with leftover files
+pushd "%tmp%"
+:: Get codepage of console I/O
+for /F "tokens=1,2 delims=:" %%a in ('chcp') do set /A l_cmd_cp=%%b>nul
 
 :: Header
 echo:YouTube Video Downloader Script
 echo:
 
+:: Handle passed arguments, if any
+if not "%1"=="" (
+    set l_url=%1
+    if "!l_url:~0,24!"=="https://www.youtube.com/" goto got_url
+)
+
 :: Query params
 set /p "l_url=%l_query_url%"
 echo:
 
+:got_url
 :: Retrieve title and formats
 echo:Retrieving video details...
 set l_title=
-for /F "tokens=*" %%a in ('%l_ytd_exe% -e "%l_url%"') do set l_title=%%a
+for /F "tokens=*" %%a in ('%l_ytdl_exe% -e "%l_url%"') do set l_title=%%a
 set l_formats=
-for /F "tokens=1,2,3,* delims= " %%a in ('%l_ytd_exe% -F "%l_url%"^|find "mp4 "') do (
+REM for /F "tokens=1,2,3,4,5,6,* delims=," %%a in ('%l_ytdl_exe% -F "%l_url%"^|find "mp4"^|find "video only"') do (
+for /F "tokens=1,2,3,4,5,6,* delims=," %%a in ('%l_ytdl_exe% -F "%l_url%"^|find "mp4"') do (
     :: Trim values
-    set l_format_code=%%a
-    set l_format_ext=%%b
-    set l_format_res=%%c
-    set l_format_note=%%d
-    :: Further process format notes
-    call %__self% : proc_parse_note l_format_note :
-    :: Join together list of formats
-    set l_format=!l_format_code!;!l_format_ext!;!l_format_res!;!l_format_note!
+    set l_format_spec=%%a
+    call "%__selfAbs%" : proc_trim l_format_spec
+    set l_format_size=%%e
+    call "%__selfAbs%" : proc_trim l_format_size
+    :: Join together and further process format spec
+    set l_format=!l_format_spec!  !l_format_size!
+    call "%__selfAbs%" : proc_parse_format l_format ;
     if not [!l_formats!]==[] set l_formats=!l_formats!,
     set l_formats=!l_formats!!l_format!
 )
-set l_format_code=
-set l_format_ext=
-set l_format_res=
-set l_format_note=
+set l_format_size=
+set l_format_spec=
 set l_format=
 echo:... done
 echo:
@@ -73,9 +88,7 @@ if %l_formats_count% GTR 25 set l_formats_count=25
 echo:Title: %l_title%
 echo:
 echo:Available formats:
-echo:
 set l_choices=
-set l_some_vidonly=no
 for /L %%z in (1,1,%l_formats_count%) do (
     set l_choice=%%z
     if "!l_choice!"=="10" set l_choice=A
@@ -94,42 +107,18 @@ for /L %%z in (1,1,%l_formats_count%) do (
     if "!l_choice!"=="23" set l_choice=N
     if "!l_choice!"=="24" set l_choice=O
     if "!l_choice!"=="25" set l_choice=P
-    set l_format_note=
-    set l_format_extra=
-    for /F "tokens=1,2,3,4 delims=;" %%a in ("!l_format_%%z!") do (
-        set l_format_%%z_code=%%a
-        set l_format_%%z_ext=%%b
-        set l_format_%%z_res=%%c
-        set l_format_%%z_note=%%d
-        if "%%d"=="" set l_format_%%z_note=
-        set l_format_%%z_vidonly=no
-        if not "!l_format_%%z_note!"=="" set "l_format_note=!l_format_%%z_note::video only:=:!"
-        if not "!l_format_%%z_note!"=="" if not "!l_format_note!"=="!l_format_%%z_note!" set l_format_%%z_vidonly=yes
-        if not "!l_format_note!"=="" set "l_format_note=!l_format_note::= !"
-        if "!l_format_%%z_vidonly!"=="yes" set "l_format_extra=  *video only*"&set l_some_vidonly=yes
-        if not "!l_format_note!"=="" echo:  !l_choice!^) !l_format_%%z_res!  ^(!l_format_%%z_ext!, !l_format_note!^)!l_format_extra!
-        if "!l_format_note!"=="" echo:  !l_choice!^) !l_format_%%z_res!  ^(!l_format_%%z_ext!^)!l_format_extra!
-    )
+    for /F "tokens=1,2,3,4,5,6 delims=;" %%a in ("!l_format_%%z!") do set l_format_%%z_id=%%f&set l_format_%%z_key=%%c&echo:  !l_choice!^) %%c  ^(%%b @ %%d/s; size: %%e+audio^)
     set l_choices=!l_choices!!l_choice!
 )
 echo:  --
 echo:  Q) Cancel
 echo:
-if "%l_some_vidonly%"=="yes" echo:  *NOTE: Video-only streams will be paired with best audio when downloaded&echo:
 set l_format_chosen=
 set /A l_quit_idx=%l_formats_count%+1
 choice /C %l_choices%Q /N /M "Choose which format to download [1-%l_formats_count%,Q]: "
 if ERRORLEVEL %l_quit_idx% goto canceled
-for /l %%c in (%l_formats_count%,-1,1) do if ERRORLEVEL %%c (
-    set l_format_chosen=!l_format_%%c!
-    set l_format_chosen_code=!l_format_%%c_code!
-    set l_format_chosen_ext=!l_format_%%c_ext!
-    set l_format_chosen_res=!l_format_%%c_res!
-    set l_format_chosen_note=!l_format_%%c_note!
-    set l_format_chosen_vidonly=!l_format_%%c_vidonly!
-)
-if not "!l_format_chosen_note!"=="" echo:- Format chosen: %l_format_chosen_res% ^(%l_format_chosen_ext%, %l_format_chosen_note::= %^)
-if "!l_format_chosen_note!"=="" echo:- Format chosen: %l_format_chosen_res% ^(%l_format_chosen_ext%^)
+for /l %%c in (%l_formats_count%,-1,1) do if ERRORLEVEL %%c set l_format_chosen=!l_format_%%c!&set l_format_chosen_id=!l_format_%%c_id!&set l_format_chosen_key=!l_format_%%c_key!
+echo:- Format chosen: %l_format_chosen_key%
 
 :: Asking for an output filename
 :: - Set JScript.NET environment
@@ -140,19 +129,12 @@ for /f "tokens=* delims=" %%v in ('dir /b /s /a:-d  /o:-n "%SystemRoot%\Microsof
 if not exist "%l_exe%" (
     "%l_jsc%" /nologo /out:"%l_exe%" "%~dpsfnx0"
 )
-:: Preop proposed filename
-set "l_filename=%l_title::=_%"
-set "l_filename=%l_filename:/=_%"
-set "l_filename=%l_filename:\=_%"
-set "l_filename=%l_filename:|=_%"
-set "l_filename=%l_filename:____=_%"
-set "l_filename=%l_filename:___=_%"
-set "l_filename=%l_filename:__=_%"
-set "l_filename=%l_filename%_%l_format_chosen_res%.mp4"
+:: Propose a filename based on video title
+set "l_filename=%l_title%_%l_format_chosen_key%.mp4"
 :: - Execute it with a suggested filename
 set l_output=
-echo:*>%__self%:%l_adsname%
-"%l_exe%" -f "%l_filename%">%__self%:%l_adsname%&set /p l_output=< %__self%:%l_adsname%
+echo:*>"%__selfAbs%:%l_adsname%"
+"%l_exe%" -dcp %l_cmd_cp% -f "%l_filename%" -p "%l_workdir%">"%__selfAbs%:%l_adsname%"&set /p l_output=< "%__selfAbs%:%l_adsname%"
 :: - Delete executable (DEBUG mode)
 if not [%DEBUG%]==[] del /f /q "%l_exe%"
 
@@ -166,10 +148,11 @@ echo:
 :: Execute youtube-dl.exe
 echo:Downloading...
 echo:---
-REM "%l_ytd_exe%" -f "%l_format_chosen_id%+bestaudio/best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" --ffmpeg-location "%l_ffmpeg_path%" "%l_url%"
-set l_format_spec=%l_format_chosen_code%
-if "%l_format_chosen_vidonly%"=="yes" set l_format_spec=%l_format_spec%+bestaudio
-"%l_ytd_exe%" -f "%l_format_spec%/best[ext=mp4]/best" -o "%l_output%" --ffmpeg-location "%l_ffmpeg_path%" "%l_url%"
+if "%l_format_chosen_id%"=="" (
+    %l_ytdl_exe% -f "best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" --ffmpeg-location "%l_ffmpeg_path%" "%l_url%"
+) else (
+    %l_ytdl_exe% -f "%l_format_chosen_id%+bestaudio/best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" --ffmpeg-location "%l_ffmpeg_path%" "%l_url%"
+)
 echo:---
 echo:done.
 echo:
@@ -186,41 +169,41 @@ pause
 goto cleanup
 
 :cleanup
-set __self=
-set l_ytd_exe=
-set l_ffmpeg_path=
-set l_query_url=
+:: Come back to original folder
+popd
+set l_cmd_cp=
+set l_adsname=
+set l_choice=
+set l_choices=
+set l_cntr=
 set l_exe_name=
 set l_exe_path=
 set l_exe=
-set l_adsname=
-set l_url=
-set l_title=
-set l_formats=
-set l_format_code=
-set l_format_ext=
-set l_format_res=
-set l_format_note=
-set l_format=
-set l_cntr=
-set l_formats_remain=
-for /L %%z in (1,1,%l_formats_count%) do set l_format_%%z=&set l_format_%%z_code=&set l_format_%%z_ext=&set l_format_%%z_res=&set l_format_%%z_note=&set l_format_%%z_vidonly=
-set l_choices=
-set l_some_vidonly=
-set l_choice=
-set l_format_extra=
-set l_format_chosen=
-set l_quit_idx=
-set l_format_chosen_code=
-set l_format_chosen_ext=
-set l_format_chosen_res=
-set l_format_chosen_note=
-set l_format_chosen_vidonly=
-set l_jsc=
+set l_ffmpeg_path=
 set l_filename=
-set l_output=
+for /L %%z in (1,1,%l_formats_count%) do set l_format_%%z=&set l_format_%%z_key=
+set l_format_chosen_key=
+set l_format_chosen=
+set l_format_size=
 set l_format_spec=
+set l_format=
+set l_formats_count=
+set l_formats_remain=
+set l_formats=
+set l_item=
+set l_quit_idx=
+set l_return=
+set l_sep=
+set l_target=
+set l_title=
+set l_value=
+set l_run_path=
+set l_ytdl_exe=
+set l_ytdl_dir=
+set l_workdir=
 set DEBUG=
+set __selfAbs=
+set __self=
 
 goto :EOF
 
@@ -229,83 +212,37 @@ goto :EOF
 :: Procedures
 
 :proc_trim
-set l_trim_target=%1
-set l_trim_value=!%l_trim_target%!
+set l_target=%1
+set l_value=!%l_target%!
 :: Trim from left
-for /f "tokens=* delims= " %%a in ("%l_trim_value%") do set l_trim_value=%%a
+for /f "tokens=* delims= " %%a in ("%l_value%") do set l_value=%%a
 :: Trim from left
-for /l %%a in (1,1,100) do if "!l_trim_value:~-1!"==" " set l_trim_value=!l_trim_value:~0,-1!
+for /l %%a in (1,1,100) do if "!l_value:~-1!"==" " set l_value=!l_value:~0,-1!
 :: Update
-set %l_trim_target%=%l_trim_value%
+set %l_target%=%l_value%
 :: Cleanup
-set l_trim_target=
-set l_trim_value=
+set l_target=
+set l_value=
 :: Exit procedure
 goto :EOF
 
-:proc_dedup_sp
-set l_dedup_target=%1
-set l_dedup_value=!%l_dedup_target%!
-:: Trim from left
-:dedup_loop
-set "l_dedup_prev=%l_dedup_value%"
-set l_dedup_value=%l_dedup_value:  = %
-if not "%l_dedup_prev%"=="%l_dedup_value%" goto dedup_loop
-:: Update
-set %l_dedup_target%=%l_dedup_value%
-:: Cleanup
-set l_dedup_target=
-set l_dedup_value=
-set l_dedup_prev=
-:: Exit procedure
-goto :EOF
-
-:proc_parse_note
-set l_parse_target=%1
-set l_sep_in=,
-set l_sep_out=%3
-if [%l_sep_out%]==[] set l_sep_out=:
-set l_parse_value=!%l_parse_target%!
+:proc_parse_format
+set l_target=%1
+set l_sep=%2
+if [%l_sep%]==[] set l_sep=;
+set l_value=!%l_target%!
 set l_return=
-for /f "tokens=1,2,3,4,5 delims=%l_sep_in%" %%a in ("%l_parse_value%") do (
-    set l_item=
-    set l_item_a=%%a
-    if not "!l_item_a!"=="" call %__self% : proc_trim l_item_a
-    if not "!l_item_a!"=="" call %__self% : proc_dedup_sp l_item_a
-    if not "!l_item_a!"=="" set l_item=!l_item!%l_sep_out%!l_item_a!
-    set l_item_b=%%b
-    if not "!l_item_b!"=="" call %__self% : proc_trim l_item_b
-    if not "!l_item_b!"=="" call %__self% : proc_dedup_sp l_item_b
-    if not "!l_item_b!"=="" set l_item=!l_item!%l_sep_out%!l_item_b!
-    set l_item_c=%%c
-    if not "!l_item_c!"=="" call %__self% : proc_trim l_item_c
-    if not "!l_item_c!"=="" call %__self% : proc_dedup_sp l_item_c
-    if not "!l_item_c!"=="" set l_item=!l_item!%l_sep_out%!l_item_c!
-    set l_item_d=%%d
-    if not "!l_item_d!"=="" call %__self% : proc_trim l_item_d
-    if not "!l_item_d!"=="" call %__self% : proc_dedup_sp l_item_d
-    if not "!l_item_d!"=="" set l_item=!l_item!%l_sep_out%!l_item_d!
-    set l_item_e=%%e
-    if not "!l_item_e!"=="" call %__self% : proc_trim l_item_e
-    if not "!l_item_e!"=="" call %__self% : proc_dedup_sp l_item_e
-    if not "!l_item_e!"=="" set l_item=!l_item!%l_sep_out%!l_item_e!
-    if "!l_item:~0,1!"=="%l_sep_out%" set l_item=!l_item:~1!
-    if not [!l_return!]==[] set l_return=!l_return!;
+for /f "tokens=1,2,3,4,5,6 delims= " %%a in ("%l_value%") do (
+    set l_item=%%b;%%c;%%d;%%e;%%f;%%a
+    if not [!l_return!]==[] set l_return=!l_return!,
     set l_return=!l_return!!l_item!
 )
 :: Update
-set %l_parse_target%=%l_return%
+set %l_target%=%l_return%
 :: Cleanup
-set l_parse_target=
-set l_sep_in=
-set l_sep_out=
-set l_parse_value=
+set l_target=
+set l_value=
 set l_return=
-set l_item_a=
-set l_item_b=
-set l_item_c=
-set l_item_d=
-set l_item_e=
 set l_item=
 :: Exit procedure
 goto :EOF
@@ -313,33 +250,170 @@ goto :EOF
 */
 
 import System;
-import System.IO;
+import System.Text;
 import System.Windows.Forms;
-import System.Text.RegularExpressions;
 
 const DEFAULT_TITLE : String = "Save output video file";
 const DEFAULT_FILENAME : String = "video.mp4";
 
-var curPath = Environment.CurrentDirectory,
-    title = DEFAULT_TITLE,
-    filename = DEFAULT_FILENAME;
+function decodeCodePage(text, codePage) {
+    switch(codePage) {
+        case '437':
+        case '500':
+        case '737':
+        case '775':
+        case '850':
+        case '852':
+        case '855':
+        case '857':
+        case '860':
+        case '861':
+        case '863':
+        case '864':
+        case '865':
+        case '869':
+        case '870':
+            codePage = 'IBM' + codePage;
+            break;
+        case '708':
+            codePage = 'ASMO-' + codePage;
+            break;
+        case '720':
+        case '862':
+            codePage = 'DOS-' + codePage;
+            break;
+        case '858':
+            codePage = 'IBM00' + codePage;
+            break;
+        case '874':
+        case '1250':
+        case '1251':
+        case '1252':
+        case '1253':
+        case '1254':
+        case '1255':
+        case '1256':
+        case '1257':
+        case '1258':
+            codePage = 'windows-' + codePage;
+            break;
+        case '866':
+        case '875':
+            codePage = 'cp' + codePage;
+            break;
+        case '932':
+            codePage = 'shift_jis';
+            break;
+        case '936':
+            codePage = 'gb2312';
+            break;
+        case '949':
+            codePage = 'ks_c_5601-1987';
+            break;
+        case '950':
+            codePage = 'ks_c_5601-1987';
+            break;
+        case '1200':
+            codePage = 'utf-16';
+            break;
+        case '1201':
+            codePage = 'unicodeFFFE';
+            break;
+        case '12000':
+            codePage = 'utf-32';
+            break;
+        case '12001':
+            codePage = 'utf-32BE';
+            break;
+        case '20127':
+            codePage = 'us-ascii';
+            break;
+        case '28591': // Western European (ISO)       
+            codePage = 'iso-8859-1';
+            break;
+        case '28592': // Central European (ISO)       
+            codePage = 'iso-8859-2';
+            break;
+        case '28593': // Latin 3 (ISO)                
+            codePage = 'iso-8859-3';
+            break;
+        case '28594': // Baltic (ISO)                 
+            codePage = 'iso-8859-4';
+            break;
+        case '28595': // Cyrillic (ISO)               
+            codePage = 'iso-8859-5';
+            break;
+        case '28596': // Arabic (ISO)                 
+            codePage = 'iso-8859-6';
+            break;
+        case '28597': // Greek (ISO)                  
+            codePage = 'iso-8859-7';
+            break;
+        case '28598': // Hebrew (ISO-Visual)          
+            codePage = 'iso-8859-8';
+            break;
+        case '28599': // Turkish (ISO)                
+            codePage = 'iso-8859-9';
+            break;
+        case '28603': // Estonian (ISO)               
+            codePage = 'iso-8859-13';
+            break;
+        case '28605': // Latin 9 (ISO)                
+            codePage = 'iso-8859-15';
+            break;
+        case '65000':
+            codePage = 'utf-7';
+            break;
+        case '65001':
+            codePage = 'utf-8';
+            break;
+    }
+    var srcEnc : Encoding = Encoding.GetEncoding(codePage),
+        win1252 : Encoding = Encoding.GetEncoding("Windows-1252"),
+        srcEncBytes : byte[] = srcEnc.GetBytes(text);
+    return win1252.GetString(srcEncBytes);
+}
+
+var curPath : String = Environment.CurrentDirectory,
+    inputCP : String = "",
+    title : String = DEFAULT_TITLE,
+    path : String = "",
+    filename : String = DEFAULT_FILENAME;
 
 var arguments:String[] = Environment.GetCommandLineArgs();
 for (var i=1; i<arguments.length; i++) {
-    switch(arguments[i]) {
-        case '/title':
+    switch(arguments[i].toLowerCase()) {
+        case '/dcp':
+        case '/decode-cp':
+        case '-dcp':
+        case '--decode-cp':
+            if (i+1 < arguments.length) {
+                inputCP = arguments[i+1];
+                i++;
+            }
+            break;
         case '/t':
-        case '-title':
+        case '/title':
         case '-t':
+        case '--title':
             if (i+1 < arguments.length) {
                 title = arguments[i+1];
                 i++;
             }
             break;
-        case '/filename':
+        case '/p':
+        case '/path':
+        case '-p':
+        case '--path':
+            if (i+1 < arguments.length) {
+                path = arguments[i+1];
+                i++;
+            }
+            break;
         case '/f':
-        case '-filename':
+        case '/filename':
         case '-f':
+        case '--filename':
             if (i+1 < arguments.length) {
                 filename = arguments[i+1];
                 i++;
@@ -351,18 +425,21 @@ for (var i=1; i<arguments.length; i++) {
     }
 }
 
-// clean filename
-var regexSearch : String = new String(Path.GetInvalidFileNameChars()) + new String(Path.GetInvalidPathChars()),
-    r = new Regex(String.Format("[{0}]", Regex.Escape(regexSearch)));
-
-filename = r.Replace(filename, "");
+if (inputCP.length > 0) {
+    title = decodeCodePage(title, inputCP);
+    path = decodeCodePage(path, inputCP);
+    filename = decodeCodePage(filename, inputCP);
+}    
+if (path.length>0) {
+    curPath = path;
+}
 
 var saveFileDialog1:SaveFileDialog = new SaveFileDialog();
 
 saveFileDialog1.InitialDirectory = curPath;
 saveFileDialog1.Filter = "MP4 Video|*.mp4";
 saveFileDialog1.Title = title;
-saveFileDialog1.FileName = filename;
+saveFileDialog1.FileName = filename.replace(/[<>:"\/\\\|\?\*]/g, "_");
 if (saveFileDialog1.ShowDialog() == DialogResult.OK) {
     // If the file name is not an empty string open it for saving.
     if (saveFileDialog1.FileName != "") {
