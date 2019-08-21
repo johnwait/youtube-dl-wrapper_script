@@ -251,6 +251,8 @@ goto :EOF
 
 import System;
 import System.Text;
+import System.Text.RegularExpressions;
+import System.IO;
 import System.Windows.Forms;
 
 const DEFAULT_TITLE : String = "Save output video file";
@@ -425,12 +427,14 @@ for (var i=1; i<arguments.length; i++) {
     }
 }
 
+// decode title, filename and path strings from secified codepage
 if (inputCP.length > 0) {
     title = decodeCodePage(title, inputCP);
     path = decodeCodePage(path, inputCP);
     filename = decodeCodePage(filename, inputCP);
-}    
-if (path.length>0) {
+}
+// if a path was indeed specified, use it (replacing our default value)
+if (path.length > 0) {
     curPath = path;
 }
 
