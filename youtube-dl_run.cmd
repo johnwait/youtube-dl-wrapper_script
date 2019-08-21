@@ -7,12 +7,19 @@ if (%1)==(:) if not (%2)==() shift & shift & goto %2
 :: Config
 :: - Default values, peths, etc.
 set l_default_vidh=
+set l_ytd_path=.
 set l_ytd_exe=youtube-dl.exe
 set l_ffmpeg_path=C:\Program Files\ffmpeg-4.0.2-win64-static\bin
 :: - Query phrases
 set "l_query_url=Enter or paste the URL here: "
 set "l_query_filebase=Enter the filename (without extension): "
 set "l_query_vidh=Preferred height to download (default: %l_vidh%): "
+
+:: Set up workspace; we want to be working within the temporary folder in case
+:: we finish with left-overs (undeleted part files, after cancelations, etc.)
+if "%l_ytd_path%"=="" set "l_ytd_path=%cd%"
+set path=%path%;%l_ytd_path%\%l_ytd_exe%
+pushd "%tmp%"
 
 :: Payload
 set /p "l_url=%l_query_url%"
