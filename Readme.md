@@ -8,7 +8,7 @@ Une _[version française](#franzosisch) du présent document est disponible plus
 
 - Localized
 - Supports YouTube URLs as well as any other URL generically supported by [_youtube-dl_](https://ytdl-org.github.io/youtube-dl/index.html)
-- Handles video format parsing, allowing video / audio streams merging**†** or standalone download
+- Handles video format parsing, allowing video / audio streams merging **†** or standalone download
 - Prompts for the location and filename of the downloaded video file using a Save-As dialog
 
 _**†** Require the availability of a second utility, [ffmpeg](https://ffmpeg.org)_
@@ -72,7 +72,7 @@ You should neither trust nor blindly execute machine code, whether compiled, int
 
 - S'adapte à la langue d'affichage du système d'exploitation
 - Prends en charge tout lien supporté par [_youtube-dl_](https://ytdl-org.github.io/youtube-dl/index.html)
-- Simplifie la sélection du format vidéo, et permets la fusion**†** de flux audio / vidéo ou encore leur téléchargement individuel
+- Simplifie la sélection du format vidéo, et permets la fusion **†** de flux audio / vidéo ou encore leur téléchargement individuel
 - Permets la spécification de l'emplacement et du nom de fichier de la vidéo à télécharger via une boîte de dialogue « Enregistrer sous »
 
 _**†** Requierd la disponibilité d'un second utilitaire, [ffmpeg (*site en anglais)](https://ffmpeg.org)_
