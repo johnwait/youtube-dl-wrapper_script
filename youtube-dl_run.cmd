@@ -315,6 +315,7 @@ set l_formats_va=
 set l_formats_vo=
 set l_formats_ao=
 :fmt_loop_1
+:: - Get formats one after the other and put them in the appropriate bin
 for /F "tokens=1,* delims=%l_formats_sep%" %%a in ("%l_formats_remain%") do (
     set "l_formats_remain=%%b"
     set l_format_streams=
@@ -335,6 +336,7 @@ for /F "tokens=1,* delims=%l_formats_sep%" %%a in ("%l_formats_remain%") do (
 )
 if not "%l_formats_remain%"=="" goto fmt_loop_1
 set l_format_line=
+:: - Put back grouped formats together
 set l_formats=
 if not "%l_formats_va%"=="" set "l_formats=%l_formats_va%"
 if not "%l_formats_vo%"=="" (
@@ -348,14 +350,15 @@ if not "%l_formats_ao%"=="" (
 set l_formats_va=
 set l_formats_vo=
 set l_formats_ao=
-:: Now ordered, break them up into individual lines
+
+:: Now ordered, break them up into individual lines, and then into fields
 set l_cntr=1
 set "l_formats_remain=%l_formats%"
 :fmt_loop_2
 for /F "tokens=1,* delims=%l_formats_sep%" %%a in ("%l_formats_remain%") do set l_format_%l_cntr%=%%a&set /A l_cntr=%l_cntr%+1&set l_formats_remain=%%b
 if not "%l_formats_remain%"=="" goto fmt_loop_2
 set /A l_formats_count=%l_cntr%-1
-:: Limit number f formats to 25
+:: Limit number of formats to 25
 if %l_formats_count% GTR 25 set l_formats_count=25
 :: Further break them up into their fields
 for /L %%z in (1,1,%l_formats_count%) do (
@@ -365,7 +368,7 @@ for /L %%z in (1,1,%l_formats_count%) do (
     for /F "tokens=1,2,3,4,5,6,7 delims=%l_fmtfields_sep%" %%a in ("!l_format_%%z!") do ( set "l_format_%%z_streams=%%a"&set "l_format_%%z_key=%%b"&set "l_format_%%z_ext=%%c"&set "l_format_%%z_res=%%d"&set "l_format_%%z_quality=%%e"&set "l_format_%%z_bitrate=%%f"&set "l_format_%%z_size=%%g" )
     REM call "%__selfAbs%" : proc_break_fmtfields l_format_%%z l_format_%%z %l_fmtfields_sep%
     if "!l_format_%%z_quality!"=="DASH_audio" set "l_format_%%z_quality=DASH"
-    :: Sanity checks
+    :: Ensure we have values for undefined fields
     if "!l_format_%%z_res!"=="" set "l_format_%%z_res=???x???"
     if "!l_format_%%z_quality!"=="" set "l_format_%%z_quality=not-specified"
     if "!l_format_%%z_bitrate!"=="" set "l_format_%%z_bitrate=???k"
@@ -403,7 +406,9 @@ for /L %%z in (1,1,%l_formats_count%) do (
     if "!l_group_header_shown!"=="" if "!l_current_group!"=="video-only" echo:  ^[%LC_FMT_GROUP_VO%^]
     if "!l_group_header_shown!"=="" if "!l_current_group!"=="audio-only" echo:  ^[%LC_FMT_GROUP_AO%^]
     set l_group_header_shown=1
-    :: Display choice line, as long as we have a format ID:
+    :: Display choice line, as long as we have a format key:
+    REM NOTE: Below, we do a series of text substitutions to essentially replace
+    REM       fields like ?$xyz?? by the value of %l_format_##_xyz%
     set l_line=
     if not "!l_format_%%z_key!"=="" (
         if "!l_format_%%z_streams!"=="video+audio" set "l_line=%LC_FMT_LINE_VA:??=¤%"
@@ -450,6 +455,7 @@ if "%l_format_streams%"=="audio-only" goto got_audio_only
 set "l_choice_desc=%l_choice%) %l_chosen_quality%, %l_chosen_ext%"
 goto got_format
 :got_video_only
+:: Map fields of chosen format as *_vo
 set l_other_format=l_format_ao
 set "l_chosen_key_vo=%l_chosen_key%"
 set l_chosen_key=
@@ -472,6 +478,7 @@ set "l_option_noaltflux=%LC_CHOICE_NO_AO_KEEP_VO%
 call set "l_format_query=%%LC_VO_CHOSEN_QUERY_AO:??choices??=%l_formats_list%,N,R,Q%%"
 goto voao_query
 :got_audio_only
+:: Map fields of chosen format as *_ao
 set l_other_format=l_format_vo
 set "l_chosen_key_ao=%l_chosen_key%"
 set l_chosen_key=
@@ -493,14 +500,18 @@ set "l_formats_list=%l_formats_list_vo:~1,-1%"
 set "l_option_noaltflux=%LC_CHOICE_NO_VO_KEEP_AO%
 call set "l_format_query=%%LC_AO_CHOSEN_QUERY_VO:??choices??=%l_formats_list%,N,R,Q%%"
 goto voao_query
+
 :voao_query
+:: Show the "keep as-is" option
 echo:
 echo:  [%LC_FMT_GROUP_MORE_OPT%]
 echo:    N^) %l_option_noaltflux%
 echo:
+:: Get ERRORLEVEL values for N/R/Q options
 set /A l_noalt_idx=%l_formats_count%+1
 set /A l_restart_idx=%l_formats_count%+2
 set /A l_quit_idx=%l_formats_count%+3
+:: Show the query lines except for the last one
 set "l_format_query=%l_format_query:\n=¤%"
 set "l_query_remain=%l_format_query%"
 set l_query_lastline=
@@ -512,12 +523,14 @@ for /F "tokens=1,* delims=¤" %%a in ("%l_query_remain%") do (
 )
 if not "%l_query_remain%"=="" goto voao_query_loop
 set "l_choices_ref=0%l_choices%NRQ"
+:: Show the last query line as part of the CHOICE command
 choice /C %l_choices%NRQ /N /M "%l_query_lastline%"
 echo:
+:: Check if one of the N/R/Q options was picked
 if ERRORLEVEL %l_quit_idx% goto canceled
 if ERRORLEVEL %l_restart_idx% goto header
 if ERRORLEVEL %l_noalt_idx% goto got_format
-:: Process format selection
+:: Process format selection, index first then key
 for /L %%c in (%l_formats_count%,-1,1) do if ERRORLEVEL %%c (
     set "l_choice=!l_choices_ref:~%%c,1!"
     set "%l_other_choice%=!l_choice!"
@@ -532,15 +545,18 @@ for /F "tokens=* delims=" %%c in ("%l_choice_idx%") do (
     set "%l_other_ext%=!l_format_%%c_ext!"
     set "%l_other_quality%=!l_format_%%c_quality!"
 )
+:: Combine keys of chosen streams, and build description string
 set "l_chosen_key=%l_chosen_key_vo%+%l_chosen_key_ao%"
 call set "l_choice_desc=%%LC_CHOSEN_FORMAT_VOAO_DETAILS:??vo??=%l_choice_vo%) %l_chosen_ext_vo%, %l_chosen_quality_vo%%%"
 call set "l_choice_desc=%%l_choice_desc:??ao??=%l_choice_ao%) %l_chosen_ext_ao%, %l_chosen_quality_ao%%%"
+
 :got_format
+:: Display chosen format to be downloaded
 set l_ytdl_merge_required=0
 for /F "tokens=1,2 delims=+" %%a in ("%l_chosen_key%") do if not "%%b%"=="" set l_ytdl_merge_required=1
 echo:%LC_CHOSEN_FORMAT%%l_choice_desc%
 
-:: Asking user for an output filename through our JScript.NET-compiled executable
+:: Ask user for an output filename through our JScript.NET-compiled executable
 :: - Choose a default filename based on the video's title
 if "%l_chosen_ext%"=="" set "l_chosen_ext=%l_chosen_ext_vo%"
 if "%l_chosen_quality%"=="" set "l_chosen_quality=%l_chosen_quality_vo%"
