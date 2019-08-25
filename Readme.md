@@ -94,7 +94,7 @@ _**†** Requiert la disponibilité d'un second utilitaire, [ffmpeg (*site en an
 
 Vous êtes maintenant prêt.e à utiliser le script pour télécharger une vidéo YouTube en vue d'une utilisation hors ligne, par exemple [la captation d'une pièce de théâtre en français basée sur le film de 1957 _12 Angry Men_](https://www.youtube.com/watch?v=B5EwCHMGIz8).
 
-#### License
+#### Licence
 
 Le fichier `youtube-dl_run.cmd` est fourni sous une licence de style « MIT » ; voici une adaptation en français de la licence :
 
