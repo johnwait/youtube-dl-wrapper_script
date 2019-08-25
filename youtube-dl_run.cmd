@@ -192,7 +192,7 @@ set l_script_lang=%l_ui_locale_lang%
 if not "%l_script_lang%"=="en" if not "%l_script_lang%"=="fr" set l_script_lang=en
 
 :: Expand localized strings
-call "%__selfAbs%" : :proc_expand_lcstrs
+call "%__selfAbs%" : proc_expand_lcstrs
 
 :: Set up our workspace
 set "l_run_path=%l_ytdl_dir%"
@@ -219,17 +219,17 @@ if not "%~1"=="" (
     if "!l_url:~0,17!"=="https://youtu.be/" goto got_url
     if "!l_url:~0,16!"=="http://youtu.be/" goto got_url
 )
-:: 2019-08-15: Make sure we don't have arguments anymore
-:emptystack_loop
-if "%~1"=="" goto emptystack_exit
-shift & goto emptystack_loop
-:emptystack_exit
-
 :query_url
 :: Query for an URL if none provided
 set /p "l_url=%LC_URL_QUERY%"
 echo:
 :got_url
+
+:: 2019-08-15: Make sure we don't have arguments anymore
+:emptystack_loop
+if "%~1"=="" goto emptystack_exit
+shift & goto emptystack_loop
+:emptystack_exit
 
 :compile_helper
 :: Build the helper executable
@@ -238,7 +238,7 @@ for /f "tokens=* delims=" %%v in ('dir /b /s /a:-d  /o:-n "%SystemRoot%\Microsof
    set "l_jsc=%%v"
 )
 :: - Recompile .NET executable, if not found *or* if %SAFEMODE%==1
-if exist "%l_exe%" if not "%SAFEMODE%"=="1" goto got_url
+if exist "%l_exe%" if not "%SAFEMODE%"=="1" goto dl_details
 if "%DEBUGEXE%"=="1" "%l_jsc%" /nologo /debug+ /print+ /out:"%l_exe%" /t:exe "%~dpsfnx0"
 if not "%DEBUGEXE%"=="1" "%l_jsc%" /nologo /fast+ /print+ /out:"%l_exe%" /t:exe "%~dpsfnx0"
 
