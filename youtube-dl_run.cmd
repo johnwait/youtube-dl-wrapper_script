@@ -1,6 +1,30 @@
 @if (@X)==(@Y) @end /* Exclude batch code from JScript
 @echo off
 
+:: --<license>-------------------------------------------------------------
+::
+:: Copyright © 2019 Jonathan Richard-Brochu and contributors.
+::
+:: Permission is hereby granted, free of charge, to any person obtaining a
+:: copy of this software and associated documentation files (the "Software"),
+:: to deal in the Software without restriction, including without limitation
+:: the rights to use, copy, modify, merge, publish, distribute, sublicense,
+:: and/or sell copies of the Software, and to permit persons to whom the
+:: Software is furnished to do so, subject to the following conditions:
+::
+:: 1. The above copyright notice and this permission notice shall be included
+::    in all copies or substantial portions of the Software.
+::
+:: 2. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+::    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+::    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+::    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+::    OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+::    ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+::    OTHER DEALINGS IN THE SOFTWARE.
+::
+:: --</license>------------------------------------------------------------
+
 :: Handle procedure calls
 set __self=%~nx0
 set "__selfAbs=%~f0"
@@ -34,13 +58,14 @@ set BATCHMODE=1
 :: Config
 ::  - Working directory, if any (leave blank to use the script's directory)
 set "l_workdir="
-::  - youtube-dl binary
+::  - youtube-dl binary, as separate path and filename; change accordingly
 set "l_ytdl_dir=%cd%"
 set "l_ytdl_exe=youtube-dl.exe"
 ::  - additional flags for youtube-dl
 set "l_ytdl_xtraflags=--youtube-skip-dash-manifest"
-::  - Path to ffmpeg.exe; change accordingly
-set "l_ffmpeg_path=C:\Program Files\ffmpeg-4.0.2-win64-static\bin"
+::  - Path to ffmpeg.exe, excluding the filename; change accordingly, e.g.
+REM set "l_ffmpeg_path=C:\Program Files\ffmpeg-4.0.2-win64-static\bin"
+set "l_ffmpeg_path="
 ::  - JScript.NET build
 set l_exe_name=__ytdl_saveas
 set l_exe_path=%tmp%
@@ -170,7 +195,7 @@ if not "%l_script_lang%"=="en" if not "%l_script_lang%"=="fr" set l_script_lang=
 call "%__selfAbs%" : :proc_expand_lcstrs
 
 :: Set up our workspace
-set "l_run_path=%cd%"
+set "l_run_path=%l_ytdl_dir%"
 set "path=%path%;%l_run_path%"
 if "%l_workdir%"=="" set "l_workdir=%l_run_path%"
 :: We want to be working within the TMP folder
@@ -543,11 +568,13 @@ echo:---
 :: Use a different variable for extra args to prevent piling up the appends
 set "l_ytdl_dlflags=%l_ytdl_xtraflags%"
 REM if "%l_ytdl_merge_required%"=="1" set "l_ytdl_dlflags= --merge-output-format %l_chosen_ext% %l_ytdl_dlflags%"
+:: 2019-08-23: Now optionally specifying the ffmpeg location in case none is provided
+if not "%l_ffmpeg_path%"=="" set "l_ytdl_dlflags= --ffmpeg-location "%l_ffmpeg_path%^" %l_ytdl_dlflags%"
 :: Executing "youtube-dl.exe"
 if "%l_chosen_key%"=="" (
-    %l_ytdl_exe% -f "best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" --ffmpeg-location "%l_ffmpeg_path%" %l_ytdl_dlflags% "%l_url%"
+    %l_ytdl_exe% -f "best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" %l_ytdl_dlflags% "%l_url%"
 ) else (
-    %l_ytdl_exe% -f "%l_chosen_key%/best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" --ffmpeg-location "%l_ffmpeg_path%" %l_ytdl_dlflags% "%l_url%"
+    %l_ytdl_exe% -f "%l_chosen_key%/best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" %l_ytdl_dlflags% "%l_url%"
 )
 echo:---
 echo:done.
