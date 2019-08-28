@@ -33,7 +33,7 @@ You're then ready to use the script to download for offline use a YouTube video,
 
 #### License
 
-The file `youtube-dl_run.cmd` is provided as a MIT-style license:
+The file `youtube-dl_run.cmd` is provided through a MIT-style license:
 
 ```
 Copyright © 2019 Jonathan Richard-Brochu and other contributors.
