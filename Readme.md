@@ -6,7 +6,7 @@
 
 #### Features
 
-- Localized
+- Localized (for English & French; feel free to suggest a translation in your language if you wish to, or fork your own copy) 
 - Supports YouTube URLs as well as any other URL generically supported by [_youtube-dl_](https://ytdl-org.github.io/youtube-dl/index.html)
 - Handles video format parsing, allowing video / audio streams merging **†** or standalone download
 - Prompts for the location and filename of the downloaded video file using a Save-As dialog
@@ -70,7 +70,7 @@ You should neither trust nor blindly execute machine code, whether compiled, int
 
 #### Fonctionnalités et avantages
 
-- S'adapte à la langue d'affichage du système d'exploitation
+- S'adapte à la langue d'affichage du système d'exploitation (pourvu qu'il s'agisse du français ou de l'anglais)
 - Prends en charge tout lien accepté par [_youtube-dl_](https://ytdl-org.github.io/youtube-dl/index.html)
 - Simplifie la sélection du format vidéo, et permets la fusion **†** de flux audio / vidéo ou encore leur téléchargement individuel
 - Permets la spécification de l'emplacement et du nom de fichier de la vidéo à télécharger via une boîte de dialogue « Enregistrer sous »
@@ -82,7 +82,7 @@ _**†** Requiert la disponibilité d'un second utilitaire, [ffmpeg (*site en an
 1. Un ordinateur Windows avec le composant .NET Framework installé ou intégré ;
 2. Un exemplaire local de l'utilitaire [_youtube-dl_](https://ytdl-org.github.io/youtube-dl/index.html) ;
 3. Facultativement (mais fortement recommandé), une installation / compilation locale de [_ffmpeg_](https://ffmpeg.org) ;
-4. Le script auquel ce document « Lisez-moi » est fait référence, c'est-à-dire `youtube-dl_run.cmd`.
+4. Le script auquel ce document « Lisez-moi » fait référence, c'est-à-dire `youtube-dl_run.cmd`.
 
 #### Consignes d'utilisation
 
@@ -103,7 +103,7 @@ Copyright © 2019 Jonathan Richard-Brochu et autres contributeurs.
 
 Par la présente, une autorisation est accordée, gratuitement, à toute 
 personne obtenant un exemplaire de ce logiciel et des fichiers de 
-documentation associés  (le "Logiciel") d'utiliser le Logiciel sans 
+documentation associés (ci-après, le "Logiciel") d'utiliser le Logiciel sans 
 restriction, y compris, sans s'y limiter, le droit d'utiliser, de copier, 
 modifier, fusionner, publier, distribuer, accorder une sous-licence et / ou 
 vendre des exemplaires ou copies du Logiciel, et il est autorisé aux 
@@ -123,6 +123,8 @@ inclus dans tous les exemplaires, copies ou parties importantes du Logiciel.
    AVEC LE LOGICIEL OU SON UTILISATION OU D'AUTRES DÉFAUTS DU LOGICIEL.
 ```
 
+**_Note importante_**: Les termes de la licence exige que cette dernière soit reprise et incluse mot à mot, sans modification aucune ; aussi, malgré qu'il vous est possible de fournir une interprétation de la licence dans une autre langue, n'est licence qu'une copie verbatim du texte de celle-ci tel qu'il a été rédigé et qui se lit dans ce cas-ci en langue anglaise, et qui figure à la fois au début du fichier script _youtube-dl\_run.cmd_ et plus haut dans ce document. Il s'agit donc de ce texte, et ce texte seulement, qui a valeur de licence et qui doit impérativement être inclus avec toute copie, diffusion, distribution ou publication du logiciel, modifié ou non.
+
 ### *Mise en garde*
 
-Vous ne devez ni faire confiance ni exécuter aveuglément un code machine, qu'il soit compilé, interprété, sous forme de script ou même lorsqu'offert sous forme de code source, y compris en source ouverte ; assurez-vous toujours que le code a été révisé ou peut être facilement révisé, que vous comprenez en quoi il consiste et ce qu'il fait et, en cas de doute, **évitez d'exécuter** un code inconnu, obscur, indigne de confiance ou, en général, tout morceau de code que vous n'avez pas écrit vous-même lorsque vous ne pouvez pas être sûr de ses actions après avoir revu le code vous-même ou l'avoir fait relire par une personne de confiance et bien informée.
+Vous ne devez ni faire confiance, ni exécuter aveuglément un code machine, qu'il soit compilé, interprété, sous forme de script ou même lorsque son code source vous est offert, y compris de source libre ; assurez-vous toujours que le code a été révisé ou peut facilement l'être, que vous comprenez en quoi il consiste et ce qu'il accomplit ; et, en cas de doute, **évitez d'exécuter** un code inconnu, obscurci, non digne de confiance ou, en général, tout morceau de code que vous n'avez pas écrit vous-même lorsque vous ne pouvez pas être sûr de ses actions après avoir revu le code vous-même ou l'avoir fait relire par une personne de confiance et bien informée.
