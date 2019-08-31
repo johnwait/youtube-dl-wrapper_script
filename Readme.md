@@ -33,9 +33,11 @@ You're then ready to use the script to download for offline use a YouTube video,
 
 #### License
 
-The file `youtube-dl_run.cmd` is provided through a MIT-style license:
+The file `youtube-dl_run.cmd` is provided through a MIT-style license and expected to be used or distributed along with its `LICENSE` file, whose content is the following:
 
 ```
+MIT License
+
 Copyright © 2019 Jonathan Richard-Brochu and contributors.
 
 Permission is hereby granted, free of charge, to any person obtaining a
@@ -57,7 +59,7 @@ Software is furnished to do so, subject to the following conditions:
    OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### *WARNING*
+### *SECURITY WARNING*
 
 You should neither trust nor blindly execute machine code, whether compiled, interpreted, available as a script even when such code it is available to you as source code, including open source software; always ensure the code has either been reviewed or can easily be reviewed, that you understand what it is and what is does, and **in doubt refrain from executing** unknown, obscure, untrustworthy, or in general any piece of code that you haven't written yourself when cannot be sure of its actions after having reviewed the code yourself or having it reviewed by a trustworthy and knowledgeable person.
 
@@ -96,9 +98,13 @@ Vous êtes maintenant prêt.e à utiliser le script pour télécharger une vidé
 
 #### Licence
 
-Le fichier `youtube-dl_run.cmd` est fourni sous une licence de style « MIT » ; voici une adaptation en français de la licence :
+Le fichier `youtube-dl_run.cmd` est disponible sous une licence de style « MIT » et devrait toujours être fourni, qu'il soit modifié ou non, en combinaison avec le fichier `LICENSE` qui l'accompagne.
+
+Le texte de la licence est régidé en anglais ; voici une adaptation en français du texte de cette licence :
 
 ```
+Licence MIT
+
 Copyright © 2019 Jonathan Richard-Brochu et autres contributeurs.
 
 Par la présente, une autorisation est accordée, gratuitement, à toute 
@@ -123,8 +129,8 @@ inclus dans tous les exemplaires, copies ou parties importantes du Logiciel.
    AVEC LE LOGICIEL OU SON UTILISATION OU D'AUTRES DÉFAUTS DU LOGICIEL.
 ```
 
-**_Note importante_**: Les termes de la licence exige que cette dernière soit reprise et incluse mot à mot, sans modification aucune ; aussi, malgré qu'il vous est possible de fournir une interprétation de la licence dans une autre langue, n'est licence qu'une copie verbatim du texte de celle-ci tel qu'il a été rédigé et qui se lit dans ce cas-ci en langue anglaise, et qui figure à la fois au début du fichier script _youtube-dl\_run.cmd_ et plus haut dans ce document. Il s'agit donc de ce texte, et ce texte seulement, qui a valeur de licence et qui doit impérativement être inclus avec toute copie, diffusion, distribution ou publication du logiciel, modifié ou non.
+**_Note importante_**: Les termes de la licence exige que cette dernière soit reprise et incluse mot à mot, sans modification aucune. Aussi, malgré qu'il vous est possible de fournir une interprétation de la licence dans une autre langue, n'est licence qu'une copie verbatim du texte de celle-ci tel qu'il a été rédigé en langue anglaise ; il s'agit donc de ce texte, et ce texte seulement, qui a valeur de licence et qui doit impérativement être inclus avec toute copie, diffusion, distribution ou publication du logiciel, que ce dernier ait été modifié ou non.
 
-### *Mise en garde*
+### *Mise en garde de sécurité*
 
 Vous ne devez ni faire confiance, ni exécuter aveuglément un code machine, qu'il soit compilé, interprété, sous forme de script ou même lorsque son code source vous est offert, y compris de source libre ; assurez-vous toujours que le code a été révisé ou peut facilement l'être, que vous comprenez en quoi il consiste et ce qu'il accomplit ; et, en cas de doute, **évitez d'exécuter** un code inconnu, obscurci, non digne de confiance ou, en général, tout morceau de code que vous n'avez pas écrit vous-même lorsque vous ne pouvez pas être sûr de ses actions après avoir revu le code vous-même ou l'avoir fait relire par une personne de confiance et bien informée.
