@@ -64,8 +64,7 @@ set "l_ytdl_exe=youtube-dl.exe"
 ::  - additional flags for youtube-dl
 set "l_ytdl_xtraflags=--youtube-skip-dash-manifest"
 ::  - Path to ffmpeg.exe, excluding the filename; change accordingly, e.g.
-REM set "l_ffmpeg_path=C:\Program Files\ffmpeg-4.0.2-win64-static\bin"
-set "l_ffmpeg_path="
+set "l_ffmpeg_path=C:\Program Files\ffmpeg-4.0.2-win64-static\bin"
 ::  - JScript.NET build
 set l_exe_name=__ytdl_saveas
 set l_exe_path=%tmp%
@@ -82,6 +81,21 @@ set "LC_SCRIPT_NAME_fr=Script de téléchargement de vidéos YouTube"
 ::  - Query for the video URL
 set "LC_URL_QUERY_en=Enter or paste the YouTube/video URL here: "
 set "LC_URL_QUERY_fr=Veuillez taper ou déposer ici le lien vers la vidéo : "
+::  - URL validation
+set "LC_INVALID_URL_en=** URL not valid"
+set "LC_INVALID_URL_fr=** Adresse URL invalide"
+::  - Option validation
+set "LC_OPT_NOT_SUPPORTED_en=** Option not supported: "
+set "LC_OPT_NOT_SUPPORTED_fr=** Option non prise en charge: "
+::  - Option: Query youtube-dl version
+set "LC_OPT_GET_VERSION_en=** Version of youtube-dl is: "
+set "LC_OPT_GET_VERSION_fr=** La version actuelle de youtube-dl est : "
+::  - Option: Trigger update of youtube-dl
+set "LC_OPT_UPDATE_YTDL_en=Trying for the update of the the youtube-dl utility..."
+set "LC_OPT_UPDATE_YTDL_fr=Début de la tentative de mise à jour de l'utilitaire youtube-dl ..."
+::  - User must check whether youtube-dl update was a success
+set "LC_CHECK_YTDL_UPDATE_en=Check result above, and press any key to continue..."
+set "LC_CHECK_YTDL_UPDATE_fr=Vérifiez si le processus a réussi, et appuyer sur une touche pour continuer ..."
 ::  - "Done", used after each successful step
 set "LC_STEP_DONE_en=... done"
 set "LC_STEP_DONE_fr=... étape accomplie."
@@ -220,9 +234,47 @@ if not "%~1"=="" (
     if "!l_url:~0,16!"=="http://youtu.be/" goto got_url
 )
 :query_url
+set l_url=
 :: Query for an URL if none provided
 set /p "l_url=%LC_URL_QUERY%"
+:: Sanity checks
+if not defined l_url goto query_url
+if "%l_url%"=="" goto query_url
+:: Handle options
+if "!l_url:~0,2!"=="--" (
+    if /I "!l_url!"=="--update" goto opt_update
+    if /I "!l_url!"=="--exit" goto canceled
+    if /I "!l_url!"=="--version" (
+        <nul set /p=%LC_OPT_GET_VERSION%
+        "%l_ytdl_exe%" --version
+        echo:
+        goto query_url
+    )
+    echo:%LC_OPT_NOT_SUPPORTED%"%l_url%"
+    goto query_url
+)
+if not "!l_url:~0,8!"=="https://" if not "!l_url:~0,7!"=="http://" echo:%LC_INVALID_URL%& goto query_url
 echo:
+goto got_url
+
+:opt_update
+echo:
+echo:%LC_OPT_UPDATE_YTDL%
+echo:
+echo:--
+call :proc_ytdl_upd
+ping -w 5000 -n 1 192.0.0.8>nul
+echo:--
+echo:
+<nul set /p=%LC_CHECK_YTDL_UPDATE%
+pause>nul
+goto header
+
+:proc_ytdl_upd
+"%l_ytdl_exe%" --update --verbose
+exit /b
+goto :EOF
+
 :got_url
 
 :: 2019-08-15: Make sure we don't have arguments anymore
@@ -636,7 +688,7 @@ set "l_p_target=%~1"
 set l_p_value=!%l_p_target%!
 :: Trim from left
 for /f "tokens=* delims= " %%a in ("%l_p_value%") do set l_p_value=%%a
-:: Trim from left
+:: Trim from right
 for /L %%a in (1,1,100) do if "!l_p_value:~-1!"==" " set l_p_value=!l_p_value:~0,-1!
 :: Update
 set %l_p_target%=%l_p_value%
@@ -937,7 +989,7 @@ if (!convertCPOnly) {
     }
     // use default values if title and/or filename weren't provided
     if (!title.length) title = DEFAULT_TITLE;
-    if (!filename.length) filename = DEFAULT_TITLE;
+    if (!filename.length) filename = DEFAULT_FILENAME;
     // initialize a new file-save dialog
     var saveFileDialog1:SaveFileDialog = new SaveFileDialog();
     saveFileDialog1.InitialDirectory = curPath;
