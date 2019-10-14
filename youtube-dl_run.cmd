@@ -500,23 +500,21 @@ for /L %%c in (%l_formats_count%,-1,1) do if ERRORLEVEL %%c (
     set "l_chosen_ext=!l_format_%%c_ext!"
     set "l_chosen_quality=!l_format_%%c_quality!"
 )
+:: 2019-10-14: Keep desc of first stream choice if we don't end up merging it
+set "l_choice_desc=%l_choice%) %l_chosen_quality%, %l_chosen_ext%"
 :: Check if this is a video-only or audio-only stream
 call set "l_format_streams=%%l_format_%l_choice%_streams%%"
 if "%l_format_streams%"=="video-only" goto got_video_only
 if "%l_format_streams%"=="audio-only" goto got_audio_only
-set "l_choice_desc=%l_choice%) %l_chosen_quality%, %l_chosen_ext%"
 goto got_format
 :got_video_only
 :: Map fields of chosen format as *_vo
 set l_other_format=l_format_ao
 set "l_chosen_key_vo=%l_chosen_key%"
-set l_chosen_key=
 set l_other_key=l_chosen_key_ao
 set "l_chosen_ext_vo=%l_chosen_ext%"
-set l_chosen_ext=
 set l_other_ext=l_chosen_ext_ao
 set "l_chosen_quality_vo=%l_chosen_quality%"
-set l_chosen_quality=
 set l_other_quality=l_chosen_quality_ao
 set "l_choice_vo=%l_choice%"
 set l_choice=
@@ -533,13 +531,10 @@ goto voao_query
 :: Map fields of chosen format as *_ao
 set l_other_format=l_format_vo
 set "l_chosen_key_ao=%l_chosen_key%"
-set l_chosen_key=
 set l_other_key=l_chosen_key_vo
 set "l_chosen_ext_ao=%l_chosen_ext%"
-set l_chosen_ext=
 set l_other_ext=l_chosen_ext_vo
 set "l_chosen_quality_ao=%l_chosen_quality%"
-set l_chosen_quality=
 set l_other_quality=l_chosen_quality_vo
 set "l_choice_ao=%l_choice%"
 set l_choice=
@@ -597,10 +592,14 @@ for /F "tokens=* delims=" %%c in ("%l_choice_idx%") do (
     set "%l_other_ext%=!l_format_%%c_ext!"
     set "%l_other_quality%=!l_format_%%c_quality!"
 )
+set "l_format_streams=video+audio"
 :: Combine keys of chosen streams, and build description string
 set "l_chosen_key=%l_chosen_key_vo%+%l_chosen_key_ao%"
 call set "l_choice_desc=%%LC_CHOSEN_FORMAT_VOAO_DETAILS:??vo??=%l_choice_vo%) %l_chosen_ext_vo%, %l_chosen_quality_vo%%%"
 call set "l_choice_desc=%%l_choice_desc:??ao??=%l_choice_ao%) %l_chosen_ext_ao%, %l_chosen_quality_ao%%%"
+:: Keep some V-O values
+set "l_chosen_ext=%l_chosen_ext_vo%"
+set "l_chosen_quality=%l_chosen_quality_vo%"
 
 :got_format
 :: Display chosen format to be downloaded
@@ -609,15 +608,20 @@ for /F "tokens=1,2 delims=+" %%a in ("%l_chosen_key%") do if not "%%b%"=="" set 
 echo:%LC_CHOSEN_FORMAT%%l_choice_desc%
 
 :: Ask user for an output filename through our JScript.NET-compiled executable
+:: - Make sure we have an extension and quality
+if "%l_chosen_ext%"=="" call set "l_chosen_ext=%%%l_other_ext%%%"
+if "%l_chosen_quality%"=="" call set "l_chosen_quality=%%%l_other_quality%%%"
 :: - Choose a default filename based on the video's title
-if "%l_chosen_ext%"=="" set "l_chosen_ext=%l_chosen_ext_vo%"
-if "%l_chosen_quality%"=="" set "l_chosen_quality=%l_chosen_quality_vo%"
-:: - Try keeping the MP4 extension; however, we're not guaranteed to keep it once merging streams
-REM if "%l_ytdl_merge_required%"=="1" set "l_chosen_ext=mp4"
 set "l_filename=%l_title%_%l_chosen_quality%.%l_chosen_ext%"
+:: - Adjust dialog title if needed
+set "l_dialog_title=%LC_SAVEAS_DLG_TITLE%"
+if not "%l_format_streams%"=="audio-only" goto ask_fname
+for /F "tokens=2,3 delims=(+^^" %%a in ("%LC_FMT_GROUP_VA%") do set "l_transl_video=%%a"&set "l_transl_audio=%%b"
+call set "l_dialog_title=%%l_dialog_title:%l_transl_video%=%l_transl_audio%%%"
+:ask_fname
 :: - Execute the utility and store the filename chosen
 set l_output=
-for /F "tokens=* delims=" %%a in ('%l_exe% -p "%l_workdir%" -f "%l_filename%" -t "%LC_SAVEAS_DLG_TITLE%"') do set "l_output=%%a"
+for /F "tokens=* delims=" %%a in ('%l_exe% -p "%l_workdir%" -f "%l_filename%" -t "%l_dialog_title%"') do set "l_output=%%a"
 
 :: Make sure user didn't cancel
 if "%l_output%"=="" goto canceled
@@ -781,21 +785,11 @@ const CP_ISO8859_1 : String = "iso-8859-1";
 
 function resolveCodePage(codePage) {
     switch(codePage) {
-        case '437':
-        case '500':
-        case '737':
-        case '775':
-        case '850':
-        case '852':
-        case '855':
-        case '857':
-        case '860':
-        case '861':
-        case '863':
-        case '864':
-        case '865':
-        case '869':
-        case '870':
+        case '437':     case '500':     case '737':
+        case '775':     case '850':     case '852':
+        case '855':     case '857':     case '860':
+        case '861':     case '863':     case '864':
+        case '865':     case '869':     case '870':
             codePage = 'IBM' + codePage;
             break;
         case '708':
@@ -808,15 +802,9 @@ function resolveCodePage(codePage) {
         case '858':
             codePage = 'IBM00' + codePage;
             break;
-        case '874':
-        case '1250':
-        case '1251':
-        case '1252':
-        case '1253':
-        case '1254':
-        case '1255':
-        case '1256':
-        case '1257':
+        case '874':     case '1250':    case '1251':
+        case '1252':    case '1253':    case '1254':
+        case '1255':    case '1256':    case '1257':
         case '1258':
             codePage = 'windows-' + codePage;
             break;
@@ -912,7 +900,8 @@ var curPath       : String = Environment.CurrentDirectory,
     path          : String = "",
     filename      : String = "",
     outputPath    : String = "",
-    convertCPOnly : Boolean = false;
+    convertCPOnly : Boolean = false,
+    debugVerbosity: Boolean = false;
 
 var arguments:String[] = Environment.GetCommandLineArgs();
 for (var i=1; i<arguments.length; i++) {
@@ -968,6 +957,10 @@ for (var i=1; i<arguments.length; i++) {
                 i++;
             }
             break;
+        case '/debug':
+        case '--debug':
+            debugVerbosity = true;
+            break;
         default:
             print( "Unhandled switch: " + arguments[i] );
             Environment.Exit(1);
@@ -975,39 +968,50 @@ for (var i=1; i<arguments.length; i++) {
 }
 
 // decode title, filename and path strings from secified codepage
-if (inputCP.length > 0) {
-    if (title.length > 0) title = convertCodePage(title, inputCP, DEFAULT_CODEPAGE);
-    if (path.length > 0) path = convertCodePage(path, inputCP, DEFAULT_CODEPAGE);
-    if (filename.length > 0) filename = convertCodePage(filename, inputCP, DEFAULT_CODEPAGE);
+if (inputCP.length) { // signature: convertCodePage(someString, fromCodePage, toCodePage)
+    if (title.length) title = convertCodePage(title, inputCP, DEFAULT_CODEPAGE);
+    if (path.length) path = convertCodePage(path, inputCP, DEFAULT_CODEPAGE);
+    if (filename.length) filename = convertCodePage(filename, inputCP, DEFAULT_CODEPAGE);
 }
 
-// check if we're being requested to show a Save-As dialog, or instead do codepage-translations
+// check if we're being requested to show a Save-As dialog
 if (!convertCPOnly) {
+    var diffCP = (outputCP !== inputCP);
+    if (debugVerbosity) {
+        Console.Error.WriteLine('\r\n---\r\nYouTube Video Downloader Script Helper EXE\r\n\r\nPassed arguments:');
+        if (title.length) Console.Error.WriteLine('- [dialog] title: "{0}"', diffCP  ? convertCodePage(title, DEFAULT_CODEPAGE, outputCP) : title);
+        if (path.length) Console.Error.WriteLine('- [output] path: "{0}"', diffCP ? convertCodePage(path, DEFAULT_CODEPAGE, outputCP) : path);
+        if (filename.length) Console.Error.WriteLine('- [suggested] filename: "{0}"', diffCP ? convertCodePage(filename, DEFAULT_CODEPAGE, outputCP) : filename);
+        if (inputCP !== DEFAULT_CODEPAGE) Console.Error.WriteLine('- input-code-page: "{0}"', diffCP ? convertCodePage(inputCP, DEFAULT_CODEPAGE, outputCP) : inputCP);
+        if (outputCP !== DEFAULT_CODEPAGE) Console.Error.WriteLine('- output-code-page: "{0}"', diffCP ? convertCodePage(outputCP, DEFAULT_CODEPAGE, outputCP) : outputCP);
+        Console.Error.WriteLine();
+    }
     // if a path was indeed specified, use it (replacing our default value)
-    if (path.length > 0) {
+    if (path.length) {
         curPath = path;
     }
     // use default values if title and/or filename weren't provided
     if (!title.length) title = DEFAULT_TITLE;
     if (!filename.length) filename = DEFAULT_FILENAME;
     // initialize a new file-save dialog
-    var saveFileDialog1:SaveFileDialog = new SaveFileDialog();
-    saveFileDialog1.InitialDirectory = curPath;
+    var saveFileDlg : SaveFileDialog = new SaveFileDialog();
+    saveFileDlg.InitialDirectory = curPath;
     // stick to provided filename extension
     var fileExt : String = (/[.]/.exec(filename)) ? /[^.]+$/.exec(filename)[0].toLowerCase() : 'mp4',
         formatName : String = "";
     // TODO: Localize, maybe?
     switch(fileExt) {
         case 'mp4':
-            saveFileDialog1.Filter = "MP4 Video (*.mp4)|*.mp4";
+            saveFileDlg.Filter = "MP4 Video (*.mp4)|*.mp4";
             break;
         case 'mkv':
-            saveFileDialog1.Filter = "Matroska Multimedia Container (*.mkv)|*.mkv";
+            saveFileDlg.Filter = "Matroska Multimedia Container (*.mkv)|*.mkv";
             break;
-        case 'm4v':       case 'vob':       case 'ogv':       case 'ogg':
-        case 'webm':      case 'flv':       case 'f4v':       case 'avi':
-        case 'wmv':       case 'mov':       case 'qt':        case 'rm':
-        case 'mpg':       case 'mpeg':      case 'mp2':
+        case 'm4v':     case 'vob':     case 'ogv':
+        case 'ogg':     case 'webm':    case 'flv':
+        case 'f4v':     case 'avi':     case 'wmv':
+        case 'mov':     case 'qt':      case 'rm':
+        case 'mpg':     case 'mpeg':    case 'mp2':
             if (fileExt == "mpg") fileExt = "mpeg"
             switch(fileExt) {
                 case 'qt': formatName = "QuickTime"; break;
@@ -1015,56 +1019,65 @@ if (!convertCPOnly) {
                 case 'ogv': case 'ogg': formatName = "OGG Vorbis"; break;
                 default: formatName = fileExt.toUpperCase();
             }
-            saveFileDialog1.Filter = formatName+" Video (*."+fileExt+")|*."+fileExt;
+            saveFileDlg.Filter = formatName+" Video (*."+fileExt+")|*."+fileExt;
             break;
-        case 'm4a':       case 'mp3':       case 'aa':        case 'aac':
-        case 'aax':       case 'aiff':      case 'ape':       case 'flac': 
-        case 'm4b':       case 'm4p':       case 'ra':        case 'voc':
-        case 'wav':       case 'wma':       case 'wv':
-            saveFileDialog1.Filter = fileExt.toUpperCase() + " Audio (*."+fileExt+")|*."+fileExt;
+        case 'm4a':     case 'mp3':     case 'aa':
+        case 'aac':     case 'aax':     case 'aiff':
+        case 'ape':     case 'flac':    case 'm4b':
+        case 'm4p':     case 'ra':      case 'voc':
+        case 'wav':     case 'wma':     case 'wv':
+            saveFileDlg.Filter = fileExt.toUpperCase() + " Audio (*."+fileExt+")|*."+fileExt;
             break;
         default:
-            saveFileDialog1.Filter = fileExt.toUpperCase() + " Multimedia File (*."+fileExt+")|*."+fileExt;
+            saveFileDlg.Filter = fileExt.toUpperCase() + " Multimedia File (*."+fileExt+")|*."+fileExt;
     }
-    saveFileDialog1.Title = title;
-    saveFileDialog1.FileName = filename.replace(/[<>:"\/\\\|\?\*]/g, "_");
+    saveFileDlg.Title = title;
+    saveFileDlg.FileName = filename.replace(/[<>:"\/\\\|\?\*]/g, "_");
     // set default output file path
     outputPath = '';
     // query user for the file location and name
-    if (saveFileDialog1.ShowDialog() == DialogResult.OK) {
+    if (debugVerbosity) Console.Error.Write('Asking user for a filename...');
+    if (saveFileDlg.ShowDialog() == DialogResult.OK) {
         // if the file name is not an empty string open it for saving.
-        if (saveFileDialog1.FileName != "") {
-            outputPath = saveFileDialog1.FileName;
+        if (saveFileDlg.FileName != "") {
+            outputPath = saveFileDlg.FileName;
+            if (debugVerbosity) {
+                Console.Error.WriteLine('\r\nPath and filename chosen: {0}', diffCP ? convertCodePage(outputPath, DEFAULT_CODEPAGE, outputCP) : outputPath);
+            }
         }
     }
-    // convert to destination encoding if needed
-    if (outputCP.length > 0) {
-        outputPath = convertCodePage(outputPath, DEFAULT_CODEPAGE, outputCP);
-        // return output path through StdOut
-        print(outputPath);
+    if (!(outputPath.length) && debugVerbosity) {
+        Console.Error.WriteLine('\r\nUser canceled selection of an output path and filename');
     }
+    // convert to destination encoding if needed
+    if (outputCP.length) {
+        outputPath = convertCodePage(outputPath, DEFAULT_CODEPAGE, outputCP);
+    }
+    // return output path through StdOut
+    print(outputPath);
+    if (debugVerbosity) Console.Error.WriteLine('---');
 } else {
     // convert to a destination encoding if required
-    if (outputCP.length > 0) {
-        if (title.length > 0) title = convertCodePage(title, DEFAULT_CODEPAGE, outputCP);
-        if (path.length > 0) path = convertCodePage(path, DEFAULT_CODEPAGE, outputCP);
-        if (filename.length > 0) filename = convertCodePage(filename, DEFAULT_CODEPAGE, outputCP);
+    if (outputCP.length) {
+        if (title.length) title = convertCodePage(title, DEFAULT_CODEPAGE, outputCP);
+        if (path.length) path = convertCodePage(path, DEFAULT_CODEPAGE, outputCP);
+        if (filename.length) filename = convertCodePage(filename, DEFAULT_CODEPAGE, outputCP);
     }
     // output *provided* strings in specific order: title, path, filename
     var bSecondLine : Boolean = false;
-    if (title.length > 0) {
+    if (title.length) {
         print(title);
         bSecondLine = true;
     }
-    if (path.length > 0) {
+    if (path.length) {
         if (bSecondLine) print("\n");
         print(path);
         bSecondLine = true;
     }
-    if (filename.length > 0) {
+    if (filename.length) {
         if (bSecondLine) print("\n");
         print(filename);
     }
 }
 
-// End of file "youtube-dl_run_v9.cmd"
+// End of file "youtube-dl_run_v9.2.cmd"
