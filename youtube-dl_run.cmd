@@ -437,7 +437,7 @@ echo:
 echo:%LC_AVAIL_FORMATS%
 echo:
 set l_choices=
-set l_alphanum=0123456789ABCDEFGHIJKLMNOP
+set l_alphanum=0123456789ABCDEFGHIJKLMOPS
 set l_current_group=
 set l_group_header_shown=
 :: Let's make it easy for us this time...
@@ -466,7 +466,7 @@ for /L %%z in (1,1,%l_formats_count%) do (
         if "!l_format_%%z_streams!"=="video+audio" set "l_line=%LC_FMT_LINE_VA:??=¤%"
         if "!l_format_%%z_streams!"=="video-only" set "l_line=%LC_FMT_LINE_VO:??=¤%"
         if "!l_format_%%z_streams!"=="audio-only" set "l_line=%LC_FMT_LINE_AO:??=¤%"
-        set "l_format_%%z_idx=%%z"
+        set "l_format_%%z_idx=!l_choice!"
         call set "l_line=!!l_line:?$=¤l_format_%%z_!!"
         set "l_line=!l_line:¤=%%!"
         call set "l_line=!l_line!"
@@ -1080,4 +1080,4 @@ if (!convertCPOnly) {
     }
 }
 
-// End of file "youtube-dl_run_v9.2.cmd"
+// End of file "youtube-dl_run_v9.3.cmd"
