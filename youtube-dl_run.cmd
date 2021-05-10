@@ -3,7 +3,7 @@
 
 :: --<license>-------------------------------------------------------------
 ::
-:: Copyright © 2019 Jonathan Richard-Brochu and contributors.
+:: Copyright © 2019-2020 Jonathan Richard-Brochu and contributors.
 ::
 :: Permission is hereby granted, free of charge, to any person obtaining a
 :: copy of this software and associated documentation files (the "Software"),
@@ -24,6 +24,61 @@
 ::    OTHER DEALINGS IN THE SOFTWARE.
 ::
 :: --</license>------------------------------------------------------------
+
+:: History:
+::
+:: 2020-10-07:  The following changes were made:
+:: (v9.4)       - (DEBUG) youtube-dl's --verbose flag is now always used, so
+::                as to make failed runs easier to debug when they occur.
+::              - Changed a few [if "%env_var%"==""] statements into their
+::                less-runtime-error-prone [if not defined env_var] variant
+::                (and eliminated them when both variants are used).
+::              - Added support for extra FFMPEG (post-processing) command
+::                line arguments.
+::              - Renamed env. variable l_choice to l_choice_alpha to put
+::                emphasis on the fact that it contains the alphanumeric
+::                choice (pressed digit/letter for the stream option) of the
+::                user, not the indexed equivalent of the same choice.
+::              - Replace env. variable l_format_streams with l_chosen_streams,
+::                the latter being set within the format selection loop.
+::              - (DEBUG) The chosen format key(s) (a YouTube-generated stream
+::                type ID) now gets shown in parentesis along with the user's
+::                chosen stream(s).
+::              - (DEBUG) The whole youtube-dl's command line is shown before
+::                being run, to aid in debugging when it is needed.
+:: 2019-11-08:  The following changes were made:
+:: (v9.3)       - BUGFIX: Now showing the alphanumeric key for options instead
+::                of their numeric index, as the former is really what the user
+::                is expected to press for selecting a stream option.
+::              - BUGFIX: Removed "N" in the list of possible stream choice
+::                option keys since it's been previously reserved for skipping
+::                the addition of a second, complementary stream to the first
+::                one. At the same time, added "S" to the list of useable keys,
+::                so that the maximum possible is still 26 choices.
+:: 2019-10-14:  The following changes were made:
+:: (v9.2)       - Improved support for dual stream downloads by remembering
+::                properties of the first stream (key/ID, extension, quality).
+::              - Now adapting the title of the Save-As dialog when downloading
+::                audio-only streams.
+::              - Added support for some debug verbosity for the JScript-based
+::                compiled Save-As helper.
+::              - Made some various optimizations to the compiled Save-As
+::                helper.
+:: 2019-09-30:  The following changes were made:
+:: (v9.1)       - Added sanity checks to filter out invalid URLs while allowing
+::                special options/verbs.
+::              - Added option for triggering youtube-dl's self-update process.
+:: 2019-08-25:  The following changes were made:
+:: (v9.0)       - BUGFIX:Fixed bugs introduced following the reordering of code
+::                blocks made in v7: (1) specifying a YouTube URL skipped the
+::                clearing of command line arguments, and made script restarts
+::                re-use the same URL everytime; and (2) when recompilation is
+::                skipped, the bad GOTO destination caused an infinite loop.
+::              - BUGFIX: For the compiled Save-As helper, fixed what value is
+::                as the default (output) filename.
+::              - Now only adding to the command line the path to the FFMPEG
+::                binary if it is provided.
+::              - Added more comments to the script.
 
 :: Handle procedure calls
 set __self=%~nx0
@@ -62,9 +117,10 @@ set "l_workdir="
 set "l_ytdl_dir=%cd%"
 set "l_ytdl_exe=youtube-dl.exe"
 ::  - additional flags for youtube-dl
-set "l_ytdl_xtraflags=--youtube-skip-dash-manifest"
+set "l_ytdl_xtraflags=--verbose --youtube-skip-dash-manifest"
 ::  - Path to ffmpeg.exe, excluding the filename; change accordingly, e.g.
 set "l_ffmpeg_path=C:\Program Files\ffmpeg-4.0.2-win64-static\bin"
+set "l_ffmpeg_xargs="
 ::  - JScript.NET build
 set l_exe_name=__ytdl_saveas
 set l_exe_path=%tmp%
@@ -211,7 +267,7 @@ call "%__selfAbs%" : proc_expand_lcstrs
 :: Set up our workspace
 set "l_run_path=%l_ytdl_dir%"
 set "path=%path%;%l_run_path%"
-if "%l_workdir%"=="" set "l_workdir=%l_run_path%"
+if not defined l_workdir set "l_workdir=%l_run_path%"
 :: We want to be working within the TMP folder
 :: => in case we end up with leftover files
 pushd "%tmp%"
@@ -239,7 +295,6 @@ set l_url=
 set /p "l_url=%LC_URL_QUERY%"
 :: Sanity checks
 if not defined l_url goto query_url
-if "%l_url%"=="" goto query_url
 :: Handle options
 if "!l_url:~0,2!"=="--" (
     if /I "!l_url!"=="--update" goto opt_update
@@ -297,7 +352,7 @@ if not "%DEBUGEXE%"=="1" "%l_jsc%" /nologo /fast+ /print+ /out:"%l_exe%" /t:exe 
 :dl_details
 :: Retrieve title and formats
 echo:%LC_STEP_DETAILS_DL%
-if "%l_ytdl_xtraflags%"=="" (
+if not defined l_ytdl_xtraflags (
     set "l_ytdl_xtraflags= "
 )
 :: Get title of video
@@ -451,7 +506,7 @@ set l_formats_idx_vo=,
 set l_formats_idx_ao=,
 for /L %%z in (1,1,%l_formats_count%) do (
     :: Get choice key
-    set "l_choice=!l_alphanum:~%%z,1!"
+    set "l_choice_alpha=!l_alphanum:~%%z,1!"
     :: Print stream-type grouping, if required
     if not "!l_current_group!"=="!l_format_%%z_streams!" set "l_current_group=!l_format_%%z_streams!"&set l_group_header_shown=
     if "!l_group_header_shown!"=="" if "!l_current_group!"=="video+audio" echo:  ^[%LC_FMT_GROUP_VA%^]
@@ -466,17 +521,17 @@ for /L %%z in (1,1,%l_formats_count%) do (
         if "!l_format_%%z_streams!"=="video+audio" set "l_line=%LC_FMT_LINE_VA:??=¤%"
         if "!l_format_%%z_streams!"=="video-only" set "l_line=%LC_FMT_LINE_VO:??=¤%"
         if "!l_format_%%z_streams!"=="audio-only" set "l_line=%LC_FMT_LINE_AO:??=¤%"
-        set "l_format_%%z_idx=!l_choice!"
+        set "l_format_%%z_idx=!l_choice_alpha!"
         call set "l_line=!!l_line:?$=¤l_format_%%z_!!"
         set "l_line=!l_line:¤=%%!"
         call set "l_line=!l_line!"
         echo:    !l_line!
     )
     :: Append to list of keys for choice.exe
-    set "l_choices=!l_choices!!l_choice!"
+    set "l_choices=!l_choices!!l_choice_alpha!"
     :: Also build alternate lists in case user chooses a video-only or audio-only option
-    if "!l_format_%%z_streams!"=="video-only" set /A l_formats_vo_count=!l_formats_vo_count!+1&set "l_choices_vo=!l_choices_vo!!l_choice!"&set "l_formats_list_vo=!l_formats_list_vo!!l_choice!,"&set "l_formats_idx_vo=!l_formats_idx_vo!%%z,"
-    if "!l_format_%%z_streams!"=="audio-only" set /A l_formats_ao_count=!l_formats_ao_count!+1&set "l_choices_ao=!l_choices_ao!!l_choice!"&set "l_formats_list_ao=!l_formats_list_ao!!l_choice!,"&set "l_formats_idx_ao=!l_formats_idx_ao!%%z,"
+    if "!l_format_%%z_streams!"=="video-only" set /A l_formats_vo_count=!l_formats_vo_count!+1&set "l_choices_vo=!l_choices_vo!!l_choice_alpha!"&set "l_formats_list_vo=!l_formats_list_vo!!l_choice_alpha!,"&set "l_formats_idx_vo=!l_formats_idx_vo!%%z,"
+    if "!l_format_%%z_streams!"=="audio-only" set /A l_formats_ao_count=!l_formats_ao_count!+1&set "l_choices_ao=!l_choices_ao!!l_choice_alpha!"&set "l_formats_list_ao=!l_formats_list_ao!!l_choice_alpha!,"&set "l_formats_idx_ao=!l_formats_idx_ao!%%z,"
 )
 echo:  --
 echo:    R^) %LC_OPTION_TRYNEWURL%
@@ -494,18 +549,18 @@ if ERRORLEVEL %l_restart_idx% goto header
 :: Process format selection
 for /L %%c in (%l_formats_count%,-1,1) do if ERRORLEVEL %%c (
     set "l_choice_idx=%%c"
-    set "l_choice=!l_alphanum:~%%c,1!"
+    set "l_choice_alpha=!l_alphanum:~%%c,1!"
     set "l_format_chosen=!l_format_%%c!"
     set "l_chosen_key=!l_format_%%c_key!"
     set "l_chosen_ext=!l_format_%%c_ext!"
     set "l_chosen_quality=!l_format_%%c_quality!"
+    set "l_chosen_streams=!l_format_%%c_streams!"
 )
 :: 2019-10-14: Keep desc of first stream choice if we don't end up merging it
-set "l_choice_desc=%l_choice%) %l_chosen_quality%, %l_chosen_ext%"
+set "l_choice_desc=%l_choice_alpha%) %l_chosen_quality%, %l_chosen_ext%"
 :: Check if this is a video-only or audio-only stream
-call set "l_format_streams=%%l_format_%l_choice%_streams%%"
-if "%l_format_streams%"=="video-only" goto got_video_only
-if "%l_format_streams%"=="audio-only" goto got_audio_only
+if "%l_chosen_streams%"=="video-only" goto got_video_only
+if "%l_chosen_streams%"=="audio-only" goto got_audio_only
 goto got_format
 :got_video_only
 :: Map fields of chosen format as *_vo
@@ -516,8 +571,8 @@ set "l_chosen_ext_vo=%l_chosen_ext%"
 set l_other_ext=l_chosen_ext_ao
 set "l_chosen_quality_vo=%l_chosen_quality%"
 set l_other_quality=l_chosen_quality_ao
-set "l_choice_vo=%l_choice%"
-set l_choice=
+set "l_choice_vo=%l_choice_alpha%"
+set l_choice_alpha=
 set l_other_choice=l_choice_ao
 :: Trim A-O choices and formats list (now that we'll use them)
 set "l_format_vo=%l_format_chosen%"
@@ -536,8 +591,8 @@ set "l_chosen_ext_ao=%l_chosen_ext%"
 set l_other_ext=l_chosen_ext_vo
 set "l_chosen_quality_ao=%l_chosen_quality%"
 set l_other_quality=l_chosen_quality_vo
-set "l_choice_ao=%l_choice%"
-set l_choice=
+set "l_choice_ao=%l_choice_alpha%"
+set l_choice_alpha=
 set l_other_choice=l_choice_vo
 :: Trim V-O choices and formats list (now that we need them)
 set "l_format_ao=%l_format_chosen%"
@@ -579,12 +634,12 @@ if ERRORLEVEL %l_restart_idx% goto header
 if ERRORLEVEL %l_noalt_idx% goto got_format
 :: Process format selection, index first then key
 for /L %%c in (%l_formats_count%,-1,1) do if ERRORLEVEL %%c (
-    set "l_choice=!l_choices_ref:~%%c,1!"
-    set "%l_other_choice%=!l_choice!"
+    set "l_choice_alpha=!l_choices_ref:~%%c,1!"
+    set "%l_other_choice%=!l_choice_alpha!"
 )
 set l_choice_idx=
 for /L %%c in (25,-1,1) do (
-    if "!l_alphanum:~%%c,1!"=="%l_choice%" set l_choice_idx=%%c
+    if "!l_alphanum:~%%c,1!"=="%l_choice_alpha%" set l_choice_idx=%%c
 )
 for /F "tokens=* delims=" %%c in ("%l_choice_idx%") do (
     set "%l_other_format%=!l_format_%%c!"
@@ -592,7 +647,7 @@ for /F "tokens=* delims=" %%c in ("%l_choice_idx%") do (
     set "%l_other_ext%=!l_format_%%c_ext!"
     set "%l_other_quality%=!l_format_%%c_quality!"
 )
-set "l_format_streams=video+audio"
+set "l_chosen_streams=video+audio"
 :: Combine keys of chosen streams, and build description string
 set "l_chosen_key=%l_chosen_key_vo%+%l_chosen_key_ao%"
 call set "l_choice_desc=%%LC_CHOSEN_FORMAT_VOAO_DETAILS:??vo??=%l_choice_vo%) %l_chosen_ext_vo%, %l_chosen_quality_vo%%%"
@@ -605,7 +660,7 @@ set "l_chosen_quality=%l_chosen_quality_vo%"
 :: Display chosen format to be downloaded
 set l_ytdl_merge_required=0
 for /F "tokens=1,2 delims=+" %%a in ("%l_chosen_key%") do if not "%%b%"=="" set l_ytdl_merge_required=1
-echo:%LC_CHOSEN_FORMAT%%l_choice_desc%
+echo:%LC_CHOSEN_FORMAT%%l_choice_desc% ("%l_chosen_key%")
 
 :: Ask user for an output filename through our JScript.NET-compiled executable
 :: - Make sure we have an extension and quality
@@ -615,7 +670,7 @@ if "%l_chosen_quality%"=="" call set "l_chosen_quality=%%%l_other_quality%%%"
 set "l_filename=%l_title%_%l_chosen_quality%.%l_chosen_ext%"
 :: - Adjust dialog title if needed
 set "l_dialog_title=%LC_SAVEAS_DLG_TITLE%"
-if not "%l_format_streams%"=="audio-only" goto ask_fname
+if not "%l_chosen_streams%"=="audio-only" goto ask_fname
 for /F "tokens=2,3 delims=(+^^" %%a in ("%LC_FMT_GROUP_VA%") do set "l_transl_video=%%a"&set "l_transl_audio=%%b"
 call set "l_dialog_title=%%l_dialog_title:%l_transl_video%=%l_transl_audio%%%"
 :ask_fname
@@ -640,12 +695,17 @@ echo:---
 :: Use a different variable for extra args to prevent piling up the appends
 set "l_ytdl_dlflags=%l_ytdl_xtraflags%"
 REM if "%l_ytdl_merge_required%"=="1" set "l_ytdl_dlflags= --merge-output-format %l_chosen_ext% %l_ytdl_dlflags%"
-:: 2019-08-23: Now optionally specifying the ffmpeg location in case none is provided
-if not "%l_ffmpeg_path%"=="" set "l_ytdl_dlflags= --ffmpeg-location "%l_ffmpeg_path%^" %l_ytdl_dlflags%"
+:: 2020-10-07: Now always specifying the ffmpeg location when provided
+if defined l_ffmpeg_path (
+    set "l_ytdl_dlflags=--ffmpeg-location "%l_ffmpeg_path%^" !l_ytdl_dlflags!"
+    if defined l_ffmpeg_xargs set "l_ytdl_dlflags=!l_ytdl_dlflags! --postprocessor-args "%l_ffmpeg_xargs%^""
+)
 :: Executing "youtube-dl.exe"
 if "%l_chosen_key%"=="" (
+    echo:[cmdline: %l_ytdl_exe% -f "best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" %l_ytdl_dlflags% "%l_url%"]
     %l_ytdl_exe% -f "best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" %l_ytdl_dlflags% "%l_url%"
 ) else (
+    echo:[cmdline: %l_ytdl_exe% -f "%l_chosen_key%/best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" %l_ytdl_dlflags% "%l_url%"]
     %l_ytdl_exe% -f "%l_chosen_key%/best[ext=mp4]+bestaudio/best[ext=mp4]" -o "%l_output%" %l_ytdl_dlflags% "%l_url%"
 )
 echo:---
@@ -1080,4 +1140,4 @@ if (!convertCPOnly) {
     }
 }
 
-// End of file "youtube-dl_run_v9.3.cmd"
+// End of file "youtube-dl_run_v9.4.cmd"
